@@ -19,6 +19,7 @@ const MIN_ZOOM = 0.65;
 const MAX_ZOOM = 2.4;
 const MIN_BUBBLE_SCALE = 0.75;
 const MAX_BUBBLE_SCALE = 1.6;
+const MAX_BUBBLE_ITEMS = 3;
 
 const VALID_STATES = new Set([
   "idle",
@@ -235,8 +236,8 @@ function createWindow() {
 function createBubbleWindow() {
   bubbleReady = false;
   bubbleWin = new BrowserWindow({
-    width: 280,
-    height: 96,
+    width: 340,
+    height: 260,
     frame: false,
     transparent: true,
     resizable: false,
@@ -325,8 +326,8 @@ function positionBubble(size = {}) {
   const spriteCenterX = petBounds.x + spriteLeft + spriteWidth / 2;
   const gap = 6;
   const margin = 8;
-  const width = Math.ceil(Number(size.width) || 280);
-  const height = Math.ceil(Number(size.height) || 96);
+  const width = Math.ceil(Number(size.width) || 320);
+  const height = Math.ceil(Number(size.height) || 110);
   const topY = spriteTop - height - gap;
   const bottomY = spriteTop + spriteHeight + gap;
 
@@ -342,17 +343,63 @@ function positionBubble(size = {}) {
   bubbleWin.setBounds({ x, y, width, height });
 }
 
-function showBubble(message) {
+function getAgentDisplayName(source) {
+  if (!source) return "";
+  return AGENTS[source]?.label || source;
+}
+
+function buildBubbleItems(state = currentState) {
+  const seen = new Set();
+  const items = [];
+
+  if (state.message) {
+    items.push({
+      id: state.sessionId || "current",
+      source: state.source || "",
+      title: getAgentDisplayName(state.source),
+      state: normalizeState(state.state),
+      message: String(state.message).slice(0, 120),
+      persistent: false
+    });
+    seen.add(state.sessionId || "current");
+  }
+
+  const sessions = agentSessions.list();
+  for (const session of sessions) {
+    if (!session || !session.message || session.state === "idle") continue;
+    if (seen.has(session.sessionId)) continue;
+    items.push({
+      id: session.sessionId,
+      source: session.source || "",
+      title: getAgentDisplayName(session.source),
+      state: normalizeState(session.state),
+      message: String(session.message).slice(0, 120),
+      persistent: true
+    });
+    seen.add(session.sessionId);
+    if (items.length >= MAX_BUBBLE_ITEMS) break;
+  }
+
+  return items.slice(0, MAX_BUBBLE_ITEMS);
+}
+
+function showBubble(input) {
   if (!bubbleWin || bubbleWin.isDestroyed()) return;
   clearTimeout(bubbleTimer);
+  bubbleTimer = null;
 
-  if (!message) {
+  const items = Array.isArray(input)
+    ? input
+    : (typeof input === "string" && input ? [{ message: input, persistent: false }] : []);
+
+  if (items.length === 0) {
     bubbleWin.hide();
     return;
   }
 
   const payload = {
-    message,
+    message: items[0]?.message || "",
+    items,
     bubbleScale: clampBubbleScale(settings.bubbleScale || 1)
   };
 
@@ -365,9 +412,11 @@ function showBubble(message) {
     pendingBubblePayload = payload;
   }
 
-  bubbleTimer = setTimeout(() => {
-    if (bubbleWin && !bubbleWin.isDestroyed()) bubbleWin.hide();
-  }, 4200);
+  if (!items.some((item) => item.persistent)) {
+    bubbleTimer = setTimeout(() => {
+      if (bubbleWin && !bubbleWin.isDestroyed()) bubbleWin.hide();
+    }, 4200);
+  }
 }
 
 function broadcastZoom() {
@@ -381,8 +430,8 @@ function broadcastBubbleScale() {
   sendToWindows("pet:set-bubble-scale", {
     bubbleScale: clampBubbleScale(settings.bubbleScale || 1)
   });
-  if (currentState.message) {
-    showBubble(currentState.message);
+  if (currentState.message || agentSessions.list().some((session) => session.message)) {
+    showBubble(buildBubbleItems(currentState));
   }
 }
 
@@ -402,7 +451,7 @@ function broadcastState(nextState) {
     actions: ACTIONS,
     activePet: toPetPayload(activePet)
   });
-  showBubble(currentState.message);
+  showBubble(buildBubbleItems(currentState));
 }
 
 function broadcastAgentAggregate() {

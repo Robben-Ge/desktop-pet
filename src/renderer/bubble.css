@@ -18,12 +18,17 @@ body {
 }
 
 .bubble {
-  display: inline-block;
-  max-width: calc(300px * var(--bubble-scale));
-  min-width: calc(120px * var(--bubble-scale));
+  display: inline-grid;
+  gap: calc(7px * var(--bubble-scale));
+  max-width: calc(320px * var(--bubble-scale));
+}
+
+.bubble-card {
+  min-width: calc(150px * var(--bubble-scale));
   min-height: calc(36px * var(--bubble-scale));
   padding: calc(8px * var(--bubble-scale)) calc(11px * var(--bubble-scale));
   border: 1px solid rgba(24, 34, 47, 0.13);
+  border-left: calc(3px * var(--bubble-scale)) solid #8aa3c2;
   border-radius: calc(9px * var(--bubble-scale));
   background: rgba(255, 255, 255, 0.94);
   color: #18222f;
@@ -31,4 +36,49 @@ body {
   line-height: 1.28;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.13);
   overflow-wrap: anywhere;
+}
+
+.bubble-card.running {
+  border-left-color: #2563eb;
+}
+
+.bubble-card.waiting {
+  border-left-color: #d97706;
+}
+
+.bubble-card.review {
+  border-left-color: #7c3aed;
+}
+
+.bubble-card.failed {
+  border-left-color: #dc2626;
+}
+
+.bubble-card.jumping,
+.bubble-card.waving {
+  border-left-color: #16a34a;
+}
+
+.bubble-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(10px * var(--bubble-scale));
+  margin-bottom: calc(4px * var(--bubble-scale));
+}
+
+.bubble-source {
+  color: #344256;
+  font-size: calc(11px * var(--bubble-scale));
+  font-weight: 700;
+}
+
+.bubble-state {
+  color: #6b778a;
+  font-size: calc(10px * var(--bubble-scale));
+  text-transform: uppercase;
+}
+
+.bubble-text {
+  color: #18222f;
 }
