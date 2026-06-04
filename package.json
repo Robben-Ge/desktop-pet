@@ -1,5 +1,5 @@
 {
-  "name": "desktop-pet-agent",
+  "name": "desktop-pet",
   "version": "0.1.0",
   "description": "Standalone desktop pet with a local state API for future agent hooks.",
   "main": "src/main.js",
@@ -16,7 +16,15 @@
     "agent-hooks",
     "electron"
   ],
-  "author": "",
+  "author": "yangbuyiya",
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/yangbuyiya/desktop-pet.git"
+  },
+  "bugs": {
+    "url": "https://github.com/yangbuyiya/desktop-pet/issues"
+  },
+  "homepage": "https://github.com/yangbuyiya/desktop-pet#readme",
   "license": "MIT",
   "devDependencies": {
     "electron": "28.2.9"

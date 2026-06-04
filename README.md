@@ -12,6 +12,10 @@ Desktop Pet Agent is a standalone Electron desktop pet runtime for agent status 
 
 It can load Codex-compatible pet spritesheets, show a draggable always-on-top desktop pet, display an edge-aware message bubble, and receive real lifecycle hooks from Codex, Claude Code, and CodeBuddy.
 
+Author: [yangbuyiya](https://github.com/yangbuyiya)
+
+Repository: [yangbuyiya/desktop-pet](https://github.com/yangbuyiya/desktop-pet)
+
 The project was built around two ideas:
 
 - Keep the pet runtime independent from any single agent product.
@@ -28,6 +32,17 @@ These agent hook integrations are available today:
 | CodeBuddy | Supported | `~/.codebuddy/settings.json` command + HTTP hooks | 9 events |
 
 The project is intentionally built for more agents. PRs for Cursor, Gemini CLI, Qwen Code, OpenCode, Kimi, Copilot, Qoder, and other hook-capable coding agents are welcome.
+
+## References
+
+The implementation was designed after comparing existing desktop companion and agent-hook projects.
+
+One-sentence conclusion: **Clawd on Desk is the closest fit; OpenPets has the most useful extensible architecture to absorb.**
+
+- **Clawd on Desk**: the closest product reference for a desktop companion that reacts to coding-agent lifecycle events. This project borrows the practical direction of hook-driven status updates, session awareness, and agent-specific adapters.
+- **OpenPets**: the best architecture reference for a more extensible pet ecosystem. This project borrows the idea of keeping reactions stable and agent-agnostic, so more hook sources can be added without rewriting the pet runtime.
+
+Desktop Pet Agent is not a copy of either project. It focuses on a small standalone Electron runtime, Codex-compatible 9-row pets, and a local hook adapter layer for Codex, Claude Code, and CodeBuddy.
 
 ## Features
 
