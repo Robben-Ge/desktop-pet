@@ -261,6 +261,65 @@ Invoke-RestMethod `
 Invoke-RestMethod -Method Post http://127.0.0.1:17861/sessions/clear
 ```
 
+## 真实 hook 接入
+
+当前已经包含真实 hook 桥接和安装器：
+
+```text
+src/hook-bridge.js      被 Claude/Codex/CodeBuddy hook 调用，读取 stdin JSON 后转发到 /events
+src/hook-installer.js   合并/移除各 agent 的 hook 配置
+```
+
+先启动桌宠：
+
+```powershell
+npm start
+```
+
+检查当前安装状态：
+
+```powershell
+npm run hooks:doctor
+```
+
+预览会写入哪些 hook，不改用户目录：
+
+```powershell
+npm run hooks:preview
+```
+
+确认后安装真实 hook：
+
+```powershell
+npm run hooks:install
+```
+
+只安装某一个 agent：
+
+```powershell
+npm run hooks:install -- --agent claude-code
+npm run hooks:install -- --agent codex
+npm run hooks:install -- --agent codebuddy
+```
+
+卸载本项目管理的 hook：
+
+```powershell
+npm run hooks:uninstall
+```
+
+安装器写入位置：
+
+```text
+Claude Code -> C:\Users\<user>\.claude\settings.json
+Codex       -> C:\Users\<user>\.codex\hooks.json
+CodeBuddy   -> C:\Users\<user>\.codebuddy\settings.json
+```
+
+它只管理带有 `--desktop-pet-agent-managed` marker 的条目，会保留已有第三方 hook。每次实际写入前，如果原文件存在，会创建 `*.desktop-pet-agent-backup-<timestamp>` 备份。
+
+Codex 使用官方 hooks 路径：每个 command hook 会收到 stdin JSON，常见字段包括 `session_id`、`transcript_path`、`cwd`、`hook_event_name`、`model`。本项目的 Codex hook 会把这些字段转发到 `/events`，并对 Codex stdout 返回 `{}`，避免 `Stop` / `SubagentStop` 这类要求 JSON stdout 的事件失败。
+
 单独调整气泡大小：
 
 ```powershell
@@ -277,6 +336,8 @@ Invoke-RestMethod `
 src/main.js                  Electron 主进程，扫描 Codex 宠物包、管理窗口、提供 HTTP API
 src/agent-events.js          agent/hook 事件归一化和 Codex 9 行动作映射
 src/session-manager.js       多 agent 会话状态聚合和优先级选择
+src/hook-bridge.js           真实 hook stdin -> /events 桥接脚本
+src/hook-installer.js        Claude/Codex/CodeBuddy hook 安装器
 src/preload.js               安全 IPC 桥接
 src/renderer/index.html      透明桌面宠物窗口
 src/renderer/renderer.js     Codex spritesheet 播放器和拖拽动作

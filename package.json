@@ -5,7 +5,11 @@
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",
-    "dev": "electron ."
+    "dev": "electron .",
+    "hooks:doctor": "node src/hook-installer.js doctor",
+    "hooks:preview": "node src/hook-installer.js preview",
+    "hooks:install": "node src/hook-installer.js install",
+    "hooks:uninstall": "node src/hook-installer.js uninstall"
   },
   "keywords": [
     "desktop-pet",

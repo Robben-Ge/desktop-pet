@@ -31,6 +31,8 @@ const REACTION_TO_STATE = {
 const EVENT_ALIASES = {
   sessionstart: "session_start",
   session_start: "session_start",
+  subagentstart: "task_start",
+  subagent_start: "task_start",
   start: "task_start",
   taskstart: "task_start",
   task_start: "task_start",
@@ -44,6 +46,8 @@ const EVENT_ALIASES = {
   posttooluse: "tool_end",
   posttoolfailure: "tool_failed",
   posttoolusefailure: "tool_failed",
+  precompact: "review",
+  postcompact: "review",
   toolend: "tool_end",
   tool_end: "tool_end",
   permissionrequest: "waiting",
@@ -62,6 +66,8 @@ const EVENT_ALIASES = {
   error: "failed",
   sessionend: "session_end",
   session_end: "session_end",
+  subagentstop: "tool_end",
+  subagent_stop: "tool_end",
   idle: "idle"
 };
 
