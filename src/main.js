@@ -310,22 +310,29 @@ function positionBubble(size = {}) {
   const petBounds = win.getBounds();
   const display = screen.getDisplayMatching(petBounds);
   const area = display.workArea;
-  const gap = 10;
+  const zoom = clampZoom(settings.zoom || 1);
+  const spriteScale = 0.86 * zoom;
+  const spriteWidth = 192 * spriteScale;
+  const spriteHeight = 208 * spriteScale;
+  const spriteLeft = 36 * zoom + 1 * zoom;
+  const spriteBottom = 12 * zoom;
+  const spriteTop = petBounds.y + petBounds.height - spriteBottom - spriteHeight;
+  const spriteCenterX = petBounds.x + spriteLeft + spriteWidth / 2;
+  const gap = 6;
   const margin = 8;
   const width = Math.ceil(Number(size.width) || 280);
   const height = Math.ceil(Number(size.height) || 96);
-  const petCenterX = petBounds.x + petBounds.width / 2;
-  const topY = petBounds.y - height - gap;
-  const bottomY = petBounds.y + petBounds.height + gap;
+  const topY = spriteTop - height - gap;
+  const bottomY = spriteTop + spriteHeight + gap;
 
   const x = clamp(
-    Math.round(petCenterX - width / 2),
+    Math.round(spriteCenterX - width / 2),
     area.x + margin,
     area.x + area.width - width - margin
   );
-  const y = topY >= area.y + margin
+  const y = Math.round(topY >= area.y + margin
     ? topY
-    : clamp(bottomY, area.y + margin, area.y + area.height - height - margin);
+    : clamp(bottomY, area.y + margin, area.y + area.height - height - margin));
 
   bubbleWin.setBounds({ x, y, width, height });
 }
