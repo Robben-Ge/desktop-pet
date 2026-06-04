@@ -5,7 +5,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
 const { AGENTS, buildDecision } = require("./agent-events");
-const { AGENT_CONFIGS, doctorHooks } = require("./hook-installer");
+const { AGENT_CONFIGS, doctorHooks, installHooks } = require("./hook-installer");
 const { SessionManager } = require("./session-manager");
 
 const API_HOST = "127.0.0.1";
@@ -512,6 +512,27 @@ function describeHookStatus(result, configuredCount) {
   return "未发现本项目管理的 hook";
 }
 
+function installHookAgent(agentId) {
+  const id = String(agentId || "").toLowerCase();
+  if (!AGENT_CONFIGS[id]) {
+    return { ok: false, error: `Unknown agent: ${agentId}`, hooks: getHookStatus() };
+  }
+
+  const result = installHooks(id);
+  return {
+    ok: true,
+    result: {
+      agent: result.agent,
+      changed: result.changed,
+      added: result.added,
+      removed: result.removed,
+      backupPath: result.backupPath || null,
+      settingsPath: result.settingsPath
+    },
+    hooks: getHookStatus()
+  };
+}
+
 function resizePetWindow(zoomInput) {
   if (!win || win.isDestroyed()) return { ok: false };
   const zoom = clampZoom(zoomInput);
@@ -648,6 +669,17 @@ async function handleApiRequest(req, res) {
 
   if (url.pathname === "/hooks/status" && req.method === "GET") {
     sendJson(res, 200, { ok: true, hooks: getHookStatus() });
+    return;
+  }
+
+  if (url.pathname === "/hooks/install" && req.method === "POST") {
+    try {
+      const body = await parseJsonBody(req);
+      const result = installHookAgent(body.agent);
+      sendJson(res, result.ok ? 200 : 400, result);
+    } catch (error) {
+      sendJson(res, 400, { ok: false, error: error.message, hooks: getHookStatus() });
+    }
     return;
   }
 
@@ -859,6 +891,13 @@ app.whenReady().then(() => {
   });
   ipcMain.handle("pet:get-hook-status", () => {
     return { ok: true, hooks: getHookStatus() };
+  });
+  ipcMain.handle("pet:install-hooks", (_event, payload) => {
+    try {
+      return installHookAgent(payload?.agent);
+    } catch (error) {
+      return { ok: false, error: error.message, hooks: getHookStatus() };
+    }
   });
   ipcMain.handle("pet:select-pet", (_event, payload) => {
     const ok = selectPet(String(payload?.id || payload?.key || ""), payload?.source);

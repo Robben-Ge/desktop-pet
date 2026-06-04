@@ -149,6 +149,7 @@ button.primary {
 }
 
 .hook-badge {
+  display: inline-block;
   min-width: 58px;
   border-radius: 999px;
   background: #fff7ed;
@@ -157,6 +158,23 @@ button.primary {
   text-align: center;
   font-size: 12px;
   font-weight: 700;
+}
+
+.hook-actions {
+  display: grid;
+  justify-items: end;
+  gap: 8px;
+}
+
+.hook-fix {
+  min-width: 76px;
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+.hook-fix:disabled {
+  cursor: default;
+  opacity: 0.66;
 }
 
 .hook-item.ok .hook-badge {

@@ -14,6 +14,7 @@ const settingsPath = document.getElementById("settingsPath");
 let activePetKey = "";
 let zoom = 1;
 let bubbleScale = 1;
+let installingHookAgent = "";
 
 function createTextElement(tag, className, text) {
   const element = document.createElement(tag);
@@ -77,12 +78,57 @@ function renderHookStatus(hooks) {
       body.appendChild(createTextElement("div", "hook-missing", `缺失：${hook.missing.join(", ")}`));
     }
 
-    const badge = createTextElement("span", "hook-badge", hook.state === "ok" ? "OK" : (hook.state === "error" ? "ERROR" : "未接入"));
+    const actions = document.createElement("div");
+    actions.className = "hook-actions";
+    actions.appendChild(createTextElement("span", "hook-badge", hook.state === "ok" ? "OK" : (hook.state === "error" ? "ERROR" : "未接入")));
+
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "hook-fix";
+    if (hook.state === "ok") {
+      button.textContent = "已接入";
+      button.disabled = true;
+    } else if (hook.state === "error") {
+      button.textContent = "需手动处理";
+      button.disabled = true;
+    } else {
+      button.textContent = installingHookAgent === hook.agent ? "修复中..." : "修复";
+      button.disabled = installingHookAgent === hook.agent;
+      button.addEventListener("click", () => installHook(hook));
+    }
+    actions.appendChild(button);
 
     item.appendChild(lamp);
     item.appendChild(body);
-    item.appendChild(badge);
+    item.appendChild(actions);
     hookList.appendChild(item);
+  }
+}
+
+async function installHook(hook) {
+  const agent = hook.agent;
+  if (!agent) return;
+
+  const confirmed = window.confirm(`要为 ${hook.label || agent} 写入真实 hook 配置吗？\n\n配置文件：${hook.settingsPath}`);
+  if (!confirmed) return;
+
+  installingHookAgent = agent;
+  const current = await window.desktopPet.getHookStatus();
+  renderHookStatus(current.hooks || []);
+
+  try {
+    const result = await window.desktopPet.installHooks({ agent });
+    if (!result.ok) {
+      window.alert(result.error || "hook 修复失败");
+    }
+    installingHookAgent = "";
+    renderHookStatus(result.hooks || []);
+  } catch (error) {
+    window.alert(error.message || "hook 修复失败");
+  } finally {
+    installingHookAgent = "";
+    const next = await window.desktopPet.getHookStatus();
+    renderHookStatus(next.hooks || []);
   }
 }
 
