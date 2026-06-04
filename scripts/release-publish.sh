@@ -8,7 +8,7 @@ fi
 
 INPUT_VERSION="${1#v}"
 TAG="v${INPUT_VERSION}"
-CURRENT_BRANCH="$(git branch --show-current)"
+CURRENT_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
 
 echo "Current branch: ${CURRENT_BRANCH}"
 echo "Target version: ${INPUT_VERSION}"
