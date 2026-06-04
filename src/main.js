@@ -14,6 +14,8 @@ const BASE_WINDOW_WIDTH = 240;
 const BASE_WINDOW_HEIGHT = 286;
 const MIN_ZOOM = 0.65;
 const MAX_ZOOM = 2.4;
+const MIN_BUBBLE_SCALE = 0.75;
+const MAX_BUBBLE_SCALE = 1.6;
 
 const VALID_STATES = new Set([
   "idle",
@@ -80,6 +82,12 @@ function clampZoom(zoom) {
   const value = Number(zoom);
   if (!Number.isFinite(value)) return 1;
   return Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, value));
+}
+
+function clampBubbleScale(scale) {
+  const value = Number(scale);
+  if (!Number.isFinite(value)) return 1;
+  return Math.max(MIN_BUBBLE_SCALE, Math.min(MAX_BUBBLE_SCALE, value));
 }
 
 function readJson(filePath) {
@@ -258,6 +266,12 @@ function broadcastZoom() {
   });
 }
 
+function broadcastBubbleScale() {
+  sendToWindows("pet:set-bubble-scale", {
+    bubbleScale: clampBubbleScale(settings.bubbleScale || 1)
+  });
+}
+
 function broadcastState(nextState) {
   const requestedState = nextState.state || currentState.state;
   const normalizedState = normalizeState(requestedState);
@@ -309,6 +323,9 @@ function buildInitialPayload() {
       zoom: clampZoom(settings.zoom || 1),
       minZoom: MIN_ZOOM,
       maxZoom: MAX_ZOOM,
+      bubbleScale: clampBubbleScale(settings.bubbleScale || 1),
+      minBubbleScale: MIN_BUBBLE_SCALE,
+      maxBubbleScale: MAX_BUBBLE_SCALE,
       baseWindowWidth: BASE_WINDOW_WIDTH,
       baseWindowHeight: BASE_WINDOW_HEIGHT
     }
@@ -327,6 +344,14 @@ function resizePetWindow(zoomInput) {
   saveSettings();
   broadcastZoom();
   return { ok: true, zoom, bounds: win.getBounds() };
+}
+
+function resizeBubble(scaleInput) {
+  const bubbleScale = clampBubbleScale(scaleInput);
+  settings.bubbleScale = bubbleScale;
+  saveSettings();
+  broadcastBubbleScale();
+  return { ok: true, bubbleScale };
 }
 
 function parseJsonBody(req) {
@@ -409,6 +434,12 @@ async function handleApiRequest(req, res) {
   if (url.pathname === "/window/resize" && req.method === "POST") {
     const body = await parseJsonBody(req);
     sendJson(res, 200, resizePetWindow(body.zoom));
+    return;
+  }
+
+  if (url.pathname === "/bubble/resize" && req.method === "POST") {
+    const body = await parseJsonBody(req);
+    sendJson(res, 200, resizeBubble(body.bubbleScale || body.scale));
     return;
   }
 
@@ -569,6 +600,9 @@ app.whenReady().then(() => {
   });
   ipcMain.handle("pet:resize-window", (_event, payload) => {
     return resizePetWindow(payload?.zoom);
+  });
+  ipcMain.handle("pet:resize-bubble", (_event, payload) => {
+    return resizeBubble(payload?.bubbleScale || payload?.scale);
   });
   ipcMain.handle("pet:finish-drag", () => {
     if (win && !win.isDestroyed()) {

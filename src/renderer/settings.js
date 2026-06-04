@@ -4,12 +4,14 @@ const petCount = document.getElementById("petCount");
 const petList = document.getElementById("petList");
 const actionGrid = document.getElementById("actionGrid");
 const zoomInfo = document.getElementById("zoomInfo");
+const bubbleInfo = document.getElementById("bubbleInfo");
 const petsRoot = document.getElementById("petsRoot");
 const petRunsRoot = document.getElementById("petRunsRoot");
 const settingsPath = document.getElementById("settingsPath");
 
 let activePetKey = "";
 let zoom = 1;
+let bubbleScale = 1;
 
 function renderActions(actions) {
   actionGrid.innerHTML = "";
@@ -66,7 +68,9 @@ async function loadSettings() {
   const initial = await window.desktopPet.getInitialState();
   activePetKey = initial.activePet?.key || "";
   zoom = Number(initial.config?.zoom) || 1;
+  bubbleScale = Number(initial.config?.bubbleScale) || 1;
   zoomInfo.textContent = `${Math.round(zoom * 100)}%`;
+  bubbleInfo.textContent = `${Math.round(bubbleScale * 100)}%`;
   apiInfo.textContent = initial.config?.apiBaseUrl || "";
   petsRoot.textContent = initial.config?.petsRoot || "";
   petRunsRoot.textContent = initial.config?.petRunsRoot || "";
@@ -84,12 +88,23 @@ window.desktopPet.onZoomChange((payload) => {
   zoom = Number(payload?.zoom) || zoom;
   zoomInfo.textContent = `${Math.round(zoom * 100)}%`;
 });
+window.desktopPet.onBubbleScaleChange((payload) => {
+  bubbleScale = Number(payload?.bubbleScale) || bubbleScale;
+  bubbleInfo.textContent = `${Math.round(bubbleScale * 100)}%`;
+});
 refreshBtn.addEventListener("click", loadSettings);
 document.querySelectorAll("[data-zoom]").forEach((button) => {
   button.addEventListener("click", () => {
     const nextZoom = Number(button.dataset.zoom);
     if (!Number.isFinite(nextZoom)) return;
     window.desktopPet.resizeWindow({ zoom: nextZoom });
+  });
+});
+document.querySelectorAll("[data-bubble-scale]").forEach((button) => {
+  button.addEventListener("click", () => {
+    const nextScale = Number(button.dataset.bubbleScale);
+    if (!Number.isFinite(nextScale)) return;
+    window.desktopPet.resizeBubble({ bubbleScale: nextScale });
   });
 });
 loadSettings();

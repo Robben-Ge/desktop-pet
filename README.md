@@ -90,10 +90,11 @@ idle 状态下鼠标移入宠物 -> 显示固定尺寸缩放手柄
 选择 C:\Users\J2441\.codex\pet-runs 下的生成调试包
 手动测试 Codex 固定 9 行动作
 通过尺寸按钮设置 75% / 100% / 125% / 150%
+通过气泡大小按钮单独设置 85% / 100% / 120% / 140%
 查看 API 地址、pets 目录、pet-runs 目录和本应用设置文件
 ```
 
-选择的宠物、桌面窗口位置和缩放比例会保存到 Electron 的 userData 设置文件。
+选择的宠物、桌面窗口位置、宠物缩放比例和气泡大小会保存到 Electron 的 userData 设置文件。气泡大小独立于宠物缩放。
 
 ## API
 
@@ -147,6 +148,16 @@ Invoke-RestMethod `
   -Uri http://127.0.0.1:17861/state `
   -ContentType "application/json" `
   -Body '{"petKey":"pet-runs:xiao-jin","state":"thinking","message":"正在思考"}'
+```
+
+单独调整气泡大小：
+
+```powershell
+Invoke-RestMethod `
+  -Method Post `
+  -Uri http://127.0.0.1:17861/bubble/resize `
+  -ContentType "application/json" `
+  -Body '{"bubbleScale":1.2}'
 ```
 
 ## 结构

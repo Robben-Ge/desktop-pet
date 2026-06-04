@@ -44,6 +44,7 @@ let lastDragDirection = null;
 let zoom = 1;
 let resizeStart = null;
 let hideResizeTimer = null;
+let bubbleScale = 1;
 
 function normalizeState(state) {
   const requested = state || "idle";
@@ -69,12 +70,6 @@ function clampZoom(value) {
 function applyZoom(nextZoom) {
   zoom = clampZoom(nextZoom || 1);
   document.documentElement.style.setProperty("--zoom", String(zoom));
-  document.documentElement.style.setProperty("--bubble-left", `${12 * zoom}px`);
-  document.documentElement.style.setProperty("--bubble-top", `${6 * zoom}px`);
-  document.documentElement.style.setProperty("--bubble-padding-y", `${8 * zoom}px`);
-  document.documentElement.style.setProperty("--bubble-padding-x", `${10 * zoom}px`);
-  document.documentElement.style.setProperty("--bubble-font-size", `${13 * zoom}px`);
-  document.documentElement.style.setProperty("--bubble-min-height", `${38 * zoom}px`);
   document.documentElement.style.setProperty("--pet-left", `${36 * zoom}px`);
   document.documentElement.style.setProperty("--pet-bottom", `${12 * zoom}px`);
   document.documentElement.style.setProperty("--pet-width", `${168 * zoom}px`);
@@ -84,6 +79,17 @@ function applyZoom(nextZoom) {
   document.documentElement.style.setProperty("--handle-bottom", `${52 * zoom}px`);
   updateSpriteMetrics();
   drawFrame();
+}
+
+function applyBubbleScale(nextScale) {
+  bubbleScale = Number.isFinite(Number(nextScale)) ? Number(nextScale) : 1;
+  bubbleScale = Math.max(0.75, Math.min(1.6, bubbleScale));
+  document.documentElement.style.setProperty("--bubble-left", `${12 * bubbleScale}px`);
+  document.documentElement.style.setProperty("--bubble-top", `${6 * bubbleScale}px`);
+  document.documentElement.style.setProperty("--bubble-padding-y", `${8 * bubbleScale}px`);
+  document.documentElement.style.setProperty("--bubble-padding-x", `${10 * bubbleScale}px`);
+  document.documentElement.style.setProperty("--bubble-font-size", `${13 * bubbleScale}px`);
+  document.documentElement.style.setProperty("--bubble-min-height", `${38 * bubbleScale}px`);
 }
 
 function getAtlasScale() {
@@ -259,12 +265,14 @@ window.desktopPet.getInitialState().then((initial) => {
   minZoom = Number(config.minZoom) || minZoom;
   maxZoom = Number(config.maxZoom) || maxZoom;
   applyZoom(Number(config.zoom) || 1);
+  applyBubbleScale(Number(config.bubbleScale) || 1);
   setPet(initial?.activePet);
   setPetState(initial);
 });
 window.desktopPet.onPetChange(setPet);
 window.desktopPet.onStateChange(setPetState);
 window.desktopPet.onZoomChange((payload) => applyZoom(Number(payload?.zoom) || zoom));
+window.desktopPet.onBubbleScaleChange((payload) => applyBubbleScale(Number(payload?.bubbleScale) || bubbleScale));
 pet.addEventListener("pointerdown", startDrag);
 pet.addEventListener("pointermove", moveDrag);
 pet.addEventListener("pointerup", endDrag);
