@@ -142,6 +142,7 @@ body {
   height: 18px;
   display: block;
   pointer-events: none;
+  object-fit: contain;
 }
 
 .sprite.ready {
