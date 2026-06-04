@@ -95,13 +95,13 @@ body {
   position: absolute;
   right: var(--handle-right);
   bottom: var(--handle-bottom);
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   display: grid;
   place-items: center;
-  border: 1px solid rgba(20, 32, 48, 0.08);
-  border-radius: 9px;
-  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(20, 32, 48, 0.1);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.86);
   color: #263241;
   box-shadow: 0 4px 12px rgba(15, 23, 42, 0.12);
   backdrop-filter: blur(6px);
@@ -138,8 +138,8 @@ body {
 }
 
 .resize-icon {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   display: block;
   pointer-events: none;
 }
