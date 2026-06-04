@@ -20,6 +20,8 @@ const MAX_ZOOM = 2.4;
 const MIN_BUBBLE_SCALE = 0.75;
 const MAX_BUBBLE_SCALE = 1.6;
 const MAX_BUBBLE_ITEMS = 3;
+const MAX_RECENT_HOOK_EVENTS = 40;
+const DEFAULT_ACTIVE_HOOK_AGENT = "codex";
 
 const VALID_STATES = new Set([
   "idle",
@@ -54,6 +56,7 @@ let agentReturnTimer = null;
 let bubbleReady = false;
 let pendingBubblePayload = null;
 const agentSessions = new SessionManager();
+let recentHookEvents = [];
 let currentState = {
   state: "idle",
   normalizedState: "idle",
@@ -349,7 +352,6 @@ function getAgentDisplayName(source) {
 }
 
 function buildBubbleItems(state = currentState) {
-  const seen = new Set();
   const items = [];
 
   if (state.message) {
@@ -359,25 +361,8 @@ function buildBubbleItems(state = currentState) {
       title: getAgentDisplayName(state.source),
       state: normalizeState(state.state),
       message: String(state.message).slice(0, 120),
-      persistent: false
+      persistent: Boolean(state.sessionId && state.source)
     });
-    seen.add(state.sessionId || "current");
-  }
-
-  const sessions = agentSessions.list();
-  for (const session of sessions) {
-    if (!session || !session.message || session.state === "idle") continue;
-    if (seen.has(session.sessionId)) continue;
-    items.push({
-      id: session.sessionId,
-      source: session.source || "",
-      title: getAgentDisplayName(session.source),
-      state: normalizeState(session.state),
-      message: String(session.message).slice(0, 120),
-      persistent: true
-    });
-    seen.add(session.sessionId);
-    if (items.length >= MAX_BUBBLE_ITEMS) break;
   }
 
   return items.slice(0, MAX_BUBBLE_ITEMS);
@@ -524,6 +509,7 @@ function buildInitialPayload() {
       settingsPath: getSettingsPath(),
       agents: AGENTS,
       hookStatus: getHookStatus(),
+      activeHookAgent: getActiveHookAgent(),
       zoom: clampZoom(settings.zoom || 1),
       minZoom: MIN_ZOOM,
       maxZoom: MAX_ZOOM,
@@ -537,6 +523,7 @@ function buildInitialPayload() {
 }
 
 function getHookStatus() {
+  const lastByAgent = getLastHookEventByAgent();
   return Object.keys(AGENT_CONFIGS).map((agentId) => {
     const result = doctorHooks(agentId);
     const configuredCount = result.valid
@@ -547,10 +534,58 @@ function getHookStatus() {
       ...result,
       totalEvents: AGENT_CONFIGS[agentId].events.length,
       configuredCount,
+      lastEvent: lastByAgent[agentId] || null,
+      selected: agentId === getActiveHookAgent(),
       state: result.status === "installed" ? "ok" : (result.status === "error" ? "error" : "missing"),
       reason: describeHookStatus(result, configuredCount)
     };
   });
+}
+
+function normalizeHookAgent(agentId) {
+  const id = String(agentId || "").toLowerCase();
+  if (AGENT_CONFIGS[id]) return id;
+  return DEFAULT_ACTIVE_HOOK_AGENT;
+}
+
+function getActiveHookAgent() {
+  return normalizeHookAgent(settings.activeHookAgent || DEFAULT_ACTIVE_HOOK_AGENT);
+}
+
+function selectHookAgent(agentId) {
+  const activeHookAgent = normalizeHookAgent(agentId);
+  settings.activeHookAgent = activeHookAgent;
+  saveSettings();
+  agentSessions.clear();
+  broadcastState({ state: "idle", message: "", source: null, sessionId: null, agentEvent: "select-hook-agent", sessions: [] });
+  return {
+    ok: true,
+    activeHookAgent,
+    hooks: getHookStatus()
+  };
+}
+
+function recordHookEvent(decision) {
+  recentHookEvents = [
+    {
+      source: decision.source,
+      event: decision.event,
+      state: decision.visualState || decision.persistentState || "",
+      sessionId: decision.sessionId,
+      message: decision.message || "",
+      receivedAt: new Date().toISOString()
+    },
+    ...recentHookEvents
+  ].slice(0, MAX_RECENT_HOOK_EVENTS);
+}
+
+function getLastHookEventByAgent() {
+  const out = {};
+  for (const event of recentHookEvents) {
+    if (!event.source || out[event.source]) continue;
+    out[event.source] = event;
+  }
+  return out;
 }
 
 function describeHookStatus(result, configuredCount) {
@@ -734,6 +769,16 @@ async function handleApiRequest(req, res) {
     return;
   }
 
+  if (url.pathname === "/hooks/select" && req.method === "POST") {
+    try {
+      const body = await parseJsonBody(req);
+      sendJson(res, 200, selectHookAgent(body.agent));
+    } catch (error) {
+      sendJson(res, 400, { ok: false, error: error.message, activeHookAgent: getActiveHookAgent(), hooks: getHookStatus() });
+    }
+    return;
+  }
+
   if (url.pathname === "/sessions" && req.method === "GET") {
     sendJson(res, 200, {
       ok: true,
@@ -801,6 +846,19 @@ async function handleApiRequest(req, res) {
 
       if (body.petId || body.petKey) {
         selectPet(String(body.petId || body.petKey), body.petSource);
+      }
+
+      recordHookEvent(decision);
+      if (decision.source !== getActiveHookAgent()) {
+        sendJson(res, 202, {
+          ok: true,
+          ignored: true,
+          reason: `Inactive hook source. Listening to ${getActiveHookAgent()}.`,
+          decision,
+          activeHookAgent: getActiveHookAgent(),
+          hooks: getHookStatus()
+        });
+        return;
       }
 
       const result = applyAgentDecision(decision);
@@ -948,6 +1006,13 @@ app.whenReady().then(() => {
       return installHookAgent(payload?.agent);
     } catch (error) {
       return { ok: false, error: error.message, hooks: getHookStatus() };
+    }
+  });
+  ipcMain.handle("pet:select-hook-agent", (_event, payload) => {
+    try {
+      return selectHookAgent(payload?.agent);
+    } catch (error) {
+      return { ok: false, error: error.message, activeHookAgent: getActiveHookAgent(), hooks: getHookStatus() };
     }
   });
   ipcMain.handle("pet:select-pet", (_event, payload) => {

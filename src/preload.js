@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld("desktopPet", {
   listPets: () => ipcRenderer.invoke("pet:list-pets"),
   getHookStatus: () => ipcRenderer.invoke("pet:get-hook-status"),
   installHooks: (payload) => ipcRenderer.invoke("pet:install-hooks", payload),
+  selectHookAgent: (payload) => ipcRenderer.invoke("pet:select-hook-agent", payload),
   selectPet: (payload) => ipcRenderer.invoke("pet:select-pet", payload),
   setState: (payload) => ipcRenderer.invoke("pet:set-state", payload),
   getWindowBounds: () => ipcRenderer.invoke("pet:get-window-bounds"),

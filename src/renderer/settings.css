@@ -172,6 +172,19 @@ button.primary {
   font-size: 12px;
 }
 
+.hook-listen {
+  min-width: 76px;
+  padding: 6px 10px;
+  border-color: #1d4ed8;
+  color: #1d4ed8;
+  font-size: 12px;
+}
+
+.hook-listen.active {
+  background: #1d4ed8;
+  color: #fff;
+}
+
 .hook-fix:disabled {
   cursor: default;
   opacity: 0.66;

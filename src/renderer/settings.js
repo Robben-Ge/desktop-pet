@@ -15,6 +15,7 @@ let activePetKey = "";
 let zoom = 1;
 let bubbleScale = 1;
 let installingHookAgent = "";
+let activeHookAgent = "codex";
 
 function createTextElement(tag, className, text) {
   const element = document.createElement(tag);
@@ -49,7 +50,8 @@ function renderActions(actions) {
 function renderHookStatus(hooks) {
   const list = Array.isArray(hooks) ? hooks : [];
   const okCount = list.filter((hook) => hook.state === "ok").length;
-  hookSummary.textContent = `${okCount}/${list.length} 已接入`;
+  const selected = list.find((hook) => hook.selected);
+  hookSummary.textContent = `${okCount}/${list.length} 已接入 · 监听 ${selected?.label || activeHookAgent}`;
   hookList.innerHTML = "";
 
   for (const hook of list) {
@@ -78,9 +80,23 @@ function renderHookStatus(hooks) {
       body.appendChild(createTextElement("div", "hook-missing", `缺失：${hook.missing.join(", ")}`));
     }
 
+    if (hook.lastEvent?.receivedAt) {
+      const receivedAt = new Date(hook.lastEvent.receivedAt);
+      const timeText = Number.isNaN(receivedAt.getTime()) ? hook.lastEvent.receivedAt : receivedAt.toLocaleTimeString();
+      body.appendChild(createTextElement("div", "hook-meta", `最后命中：${timeText} · ${hook.lastEvent.event || ""}`));
+    }
+
     const actions = document.createElement("div");
     actions.className = "hook-actions";
     actions.appendChild(createTextElement("span", "hook-badge", hook.state === "ok" ? "OK" : (hook.state === "error" ? "ERROR" : "未接入")));
+
+    const selectButton = document.createElement("button");
+    selectButton.type = "button";
+    selectButton.className = hook.selected ? "hook-listen active" : "hook-listen";
+    selectButton.textContent = hook.selected ? "监听中" : "监听";
+    selectButton.disabled = hook.selected;
+    selectButton.addEventListener("click", () => selectHookAgent(hook));
+    actions.appendChild(selectButton);
 
     const button = document.createElement("button");
     button.type = "button";
@@ -102,6 +118,21 @@ function renderHookStatus(hooks) {
     item.appendChild(body);
     item.appendChild(actions);
     hookList.appendChild(item);
+  }
+}
+
+async function selectHookAgent(hook) {
+  if (!hook.agent) return;
+  try {
+    const result = await window.desktopPet.selectHookAgent({ agent: hook.agent });
+    if (!result.ok) {
+      window.alert(result.error || "切换监听失败");
+      return;
+    }
+    activeHookAgent = result.activeHookAgent || hook.agent;
+    renderHookStatus(result.hooks || []);
+  } catch (error) {
+    window.alert(error.message || "切换监听失败");
   }
 }
 
@@ -165,6 +196,7 @@ async function loadSettings() {
   activePetKey = initial.activePet?.key || "";
   zoom = Number(initial.config?.zoom) || 1;
   bubbleScale = Number(initial.config?.bubbleScale) || 1;
+  activeHookAgent = initial.config?.activeHookAgent || "codex";
   zoomInfo.textContent = `${Math.round(zoom * 100)}%`;
   bubbleInfo.textContent = `${Math.round(bubbleScale * 100)}%`;
   apiInfo.textContent = initial.config?.apiBaseUrl || "";
