@@ -107,6 +107,12 @@ idle 状态下鼠标移入宠物 -> 显示固定尺寸缩放手柄
 Invoke-RestMethod http://127.0.0.1:17861/health
 ```
 
+查看当前 agent 会话聚合：
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:17861/sessions
+```
+
 列出宠物：
 
 ```powershell
@@ -158,6 +164,103 @@ Invoke-RestMethod `
 
 Windows PowerShell 5.1 里不要直接把中文 JSON 字符串传给 `-Body`，它可能按系统默认编码发送，气泡会显示 `????`。上面的写法会明确发送 UTF-8 字节。
 
+## Agent event 协议
+
+这一层参考了两个方向：
+
+```text
+Clawd on Desk -> 多 agent hook 输入、会话状态聚合、优先级状态机
+OpenPets      -> 稳定的事件/反应协议，方便后续扩展 Claude、Codex、CodeBuddy
+```
+
+当前阶段先实现本地事件入口和状态机，不自动修改 `~/.claude`、`~/.codex` 或 CodeBuddy 配置。后续接真实 hook 时，只要让 hook 向 `/events` 发事件即可。
+
+通用事件格式：
+
+```json
+{
+  "source": "claude-code",
+  "event": "tool_start",
+  "sessionId": "optional-session-id",
+  "message": "Claude 正在执行工具"
+}
+```
+
+支持的 `source`：
+
+```text
+claude-code
+codex
+codebuddy
+opencode
+openpets
+```
+
+支持的通用事件：
+
+```text
+session_start -> 挥手一下，并把会话放入 review
+task_start    -> review
+prompt        -> review
+tool_start    -> running；测试命令会映射为 waiting
+tool_end      -> review
+waiting       -> waiting
+notification  -> 挥手提醒
+done          -> jumping，然后回到其他活跃会话或 idle
+failed        -> failed，然后回到其他活跃会话或 idle
+session_end   -> 清理会话
+```
+
+也支持 OpenPets 风格的 `reaction`：
+
+```text
+thinking -> review
+working/editing/running -> running
+testing/waiting -> waiting
+waving -> waving
+success/celebrating -> jumping
+error -> failed
+```
+
+发送通用事件：
+
+```powershell
+$body = '{"source":"claude-code","event":"tool_start","sessionId":"demo","message":"Claude 正在执行工具"}'
+Invoke-RestMethod `
+  -Method Post `
+  -Uri http://127.0.0.1:17861/events `
+  -ContentType "application/json; charset=utf-8" `
+  -Body ([System.Text.Encoding]::UTF8.GetBytes($body))
+```
+
+直接发送 Claude/CodeBuddy 兼容 hook payload：
+
+```powershell
+$body = '{"source":"codebuddy","hook_event_name":"Stop","session_id":"demo","message":"CodeBuddy 完成了"}'
+Invoke-RestMethod `
+  -Method Post `
+  -Uri http://127.0.0.1:17861/events `
+  -ContentType "application/json; charset=utf-8" `
+  -Body ([System.Text.Encoding]::UTF8.GetBytes($body))
+```
+
+直接发送 OpenPets reaction：
+
+```powershell
+$body = '{"source":"openpets","reaction":"thinking","sessionId":"demo"}'
+Invoke-RestMethod `
+  -Method Post `
+  -Uri http://127.0.0.1:17861/events `
+  -ContentType "application/json; charset=utf-8" `
+  -Body ([System.Text.Encoding]::UTF8.GetBytes($body))
+```
+
+清空当前 agent 会话：
+
+```powershell
+Invoke-RestMethod -Method Post http://127.0.0.1:17861/sessions/clear
+```
+
 单独调整气泡大小：
 
 ```powershell
@@ -172,6 +275,8 @@ Invoke-RestMethod `
 
 ```text
 src/main.js                  Electron 主进程，扫描 Codex 宠物包、管理窗口、提供 HTTP API
+src/agent-events.js          agent/hook 事件归一化和 Codex 9 行动作映射
+src/session-manager.js       多 agent 会话状态聚合和优先级选择
 src/preload.js               安全 IPC 桥接
 src/renderer/index.html      透明桌面宠物窗口
 src/renderer/renderer.js     Codex spritesheet 播放器和拖拽动作

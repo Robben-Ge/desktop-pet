@@ -4,6 +4,8 @@ const http = require("node:http");
 const os = require("node:os");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
+const { AGENTS, buildDecision } = require("./agent-events");
+const { SessionManager } = require("./session-manager");
 
 const API_HOST = "127.0.0.1";
 const API_PORT = Number(process.env.PET_PORT || 17861);
@@ -46,8 +48,10 @@ let activePet = null;
 let settings = {};
 let stateBeforeDrag = null;
 let bubbleTimer = null;
+let agentReturnTimer = null;
 let bubbleReady = false;
 let pendingBubblePayload = null;
+const agentSessions = new SessionManager();
 let currentState = {
   state: "idle",
   normalizedState: "idle",
@@ -400,6 +404,44 @@ function broadcastState(nextState) {
   showBubble(currentState.message);
 }
 
+function broadcastAgentAggregate() {
+  const aggregate = agentSessions.getAggregate();
+  broadcastState({
+    state: aggregate.state,
+    message: aggregate.message,
+    source: aggregate.source,
+    sessionId: aggregate.sessionId,
+    agentEvent: "aggregate",
+    sessions: agentSessions.list()
+  });
+}
+
+function applyAgentDecision(decision) {
+  if (agentReturnTimer) {
+    clearTimeout(agentReturnTimer);
+    agentReturnTimer = null;
+  }
+
+  const result = agentSessions.apply(decision);
+  broadcastState({
+    state: result.display.state,
+    message: result.display.message,
+    source: result.display.source,
+    sessionId: result.display.sessionId,
+    agentEvent: result.display.agentEvent,
+    sessions: result.sessions
+  });
+
+  if (result.display.durationMs > 0) {
+    agentReturnTimer = setTimeout(() => {
+      agentReturnTimer = null;
+      broadcastAgentAggregate();
+    }, result.display.durationMs);
+  }
+
+  return result;
+}
+
 function broadcastPet() {
   sendToWindows("pet:set-pet", toPetPayload(activePet));
 }
@@ -430,6 +472,7 @@ function buildInitialPayload() {
       petsRoot: PETS_DIR,
       petRunsRoot: PET_RUNS_DIR,
       settingsPath: getSettingsPath(),
+      agents: AGENTS,
       zoom: clampZoom(settings.zoom || 1),
       minZoom: MIN_ZOOM,
       maxZoom: MAX_ZOOM,
@@ -551,6 +594,7 @@ async function handleApiRequest(req, res) {
     sendJson(res, 200, {
       ok: true,
       state: currentState,
+      agentSessions: agentSessions.snapshot(),
       actions: ACTIONS,
       activePet: toPetPayload(activePet),
       petsRoot: PETS_DIR,
@@ -572,6 +616,25 @@ async function handleApiRequest(req, res) {
 
   if (url.pathname === "/actions" && req.method === "GET") {
     sendJson(res, 200, { ok: true, actions: ACTIONS });
+    return;
+  }
+
+  if (url.pathname === "/sessions" && req.method === "GET") {
+    sendJson(res, 200, {
+      ok: true,
+      ...agentSessions.snapshot()
+    });
+    return;
+  }
+
+  if (url.pathname === "/sessions/clear" && req.method === "POST") {
+    const snapshot = agentSessions.clear();
+    if (agentReturnTimer) {
+      clearTimeout(agentReturnTimer);
+      agentReturnTimer = null;
+    }
+    broadcastState({ state: "idle", message: "", source: null, sessionId: null, agentEvent: "clear", sessions: [] });
+    sendJson(res, 200, { ok: true, ...snapshot });
     return;
   }
 
@@ -603,9 +666,47 @@ async function handleApiRequest(req, res) {
     return;
   }
 
+  if (url.pathname === "/events" && req.method === "POST") {
+    try {
+      const body = await parseJsonBody(req);
+      const decision = buildDecision(body);
+
+      if (!decision) {
+        sendJson(res, 202, {
+          ok: true,
+          ignored: true,
+          reason: "Unknown or unsupported event",
+          received: {
+            source: body.source || body.agent || body.agentId || null,
+            event: body.event || body.type || body.hook_event_name || body.reaction || null
+          }
+        });
+        return;
+      }
+
+      if (body.petId || body.petKey) {
+        selectPet(String(body.petId || body.petKey), body.petSource);
+      }
+
+      const result = applyAgentDecision(decision);
+      sendJson(res, 200, {
+        ok: true,
+        decision,
+        display: result.display,
+        aggregate: result.aggregate,
+        sessions: result.sessions,
+        activePet: toPetPayload(activePet)
+      });
+    } catch (error) {
+      sendJson(res, 400, { ok: false, error: error.message });
+    }
+    return;
+  }
+
   if (url.pathname === "/state" && req.method === "GET") {
     sendJson(res, 200, {
       ...currentState,
+      agentSessions: agentSessions.snapshot(),
       activePet: toPetPayload(activePet)
     });
     return;
