@@ -1,96 +1,51 @@
 # Desktop Pet Agent
 
 <p align="center">
-  <img src="src/assets/logo.svg" width="128" height="128" alt="Desktop Pet Agent logo" />
+  <img src="src/assets/logo.png" width="128" height="128" alt="Desktop Pet Agent logo" />
 </p>
 
 <p align="center">
-  A standalone desktop pet runtime for Codex-compatible pets and real agent hooks.
+  A standalone Electron desktop pet runtime for Codex-compatible pets and real agent hooks.
 </p>
 
-Desktop Pet Agent is a standalone Electron desktop pet runtime for agent status feedback.
+<p align="center">
+  <a href="README.zh-CN.md">中文文档</a>
+</p>
 
-It can load Codex-compatible pet spritesheets, show a draggable always-on-top desktop pet, display an edge-aware message bubble, and receive real lifecycle hooks from Codex, Claude Code, and CodeBuddy.
+Desktop Pet Agent shows a draggable always-on-top desktop companion, plays Codex-compatible pet spritesheets, displays an edge-aware message bubble, and reacts to lifecycle hooks from Codex, Claude Code, and CodeBuddy.
 
-Author: [yangbuyiya](https://github.com/yangbuyiya)
+The project has two goals:
 
-Repository: [yangbuyiya/desktop-pet](https://github.com/yangbuyiya/desktop-pet)
-
-The project was built around two ideas:
-
-- Keep the pet runtime independent from any single agent product.
-- Normalize agent hook events into a small, stable visual state machine.
-
-## Integrated Agent Hooks
-
-These agent hook integrations are available today:
-
-| Agent | Status | Hook method | Events |
-| --- | --- | --- | --- |
-| Codex | Supported | `~/.codex/hooks.json` command hooks | 10 events |
-| Claude Code | Supported | `~/.claude/settings.json` exec command hooks | 6 events |
-| CodeBuddy | Supported | `~/.codebuddy/settings.json` command + HTTP hooks | 9 events |
-
-The project is intentionally built for more agents. PRs for Cursor, Gemini CLI, Qwen Code, OpenCode, Kimi, Copilot, Qoder, and other hook-capable coding agents are welcome.
-
-## References
-
-The implementation was designed after comparing existing desktop companion and agent-hook projects.
-
-One-sentence conclusion: **Clawd on Desk is the closest fit; OpenPets has the most useful extensible architecture to absorb.**
-
-- **Clawd on Desk**: the closest product reference for a desktop companion that reacts to coding-agent lifecycle events. This project borrows the practical direction of hook-driven status updates, session awareness, and agent-specific adapters.
-- **OpenPets**: the best architecture reference for a more extensible pet ecosystem. This project borrows the idea of keeping reactions stable and agent-agnostic, so more hook sources can be added without rewriting the pet runtime.
-
-Desktop Pet Agent is not a copy of either project. It focuses on a small standalone Electron runtime, Codex-compatible 9-row pets, and a local hook adapter layer for Codex, Claude Code, and CodeBuddy.
+- keep the desktop pet runtime independent from any single agent product;
+- normalize different agent hook payloads into one small visual state machine.
 
 ## Features
 
-- Standalone Electron desktop pet window.
-- Reads Codex-compatible pet packages from local `~/.codex/pets` and `~/.codex/pet-runs`.
-- Supports Codex fixed 9-row pet action atlas.
+- Standalone Electron desktop pet window with a tray icon; the pet window stays out of the main taskbar.
+- Ships with bundled pets from `src/assets/pets`, so the app has usable pets on first launch.
+- Loads Codex-compatible pet packages from one selected pets directory, defaulting to `~/.codex/pets`.
+- Links to compatible pet galleries:
+  - [Petdex](https://petdex.crafter.run/zh)
+  - [Codex Pets](https://codex-pets.net/)
+  - [SpriteYard](https://spriteyard.com/)
+  - [Codex Pet Shop](https://www.codexpetshop.com/)
+- Supports `.codex` pets and a custom pets folder.
+- Supports the fixed 8-column x 9-row Codex pet atlas.
 - Draggable pet with left/right running animation while moving.
-- Idle-only resize handle, matching the original Codex desktop pet behavior.
-- Independent bubble window with configurable bubble scale.
+- Idle-only resize handle and independently configurable message bubble scale.
 - Edge-aware bubble placement near screen boundaries.
-- Single active hook source selection: Codex, Claude Code, or CodeBuddy.
-- Hook status panel with install/repair buttons.
-- Local HTTP API for manual state updates and external integrations.
 - Real hook installer for Codex, Claude Code, and CodeBuddy.
-- Session aggregation and state priority handling.
-- Debounced `working -> thinking` transition to avoid bubble/animation flicker during tool chains.
-
-## Preview
-
-This repo does not ship a default pet asset. It uses pets already installed in:
-
-```text
-~/.codex/pets
-~/.codex/pet-runs
-```
-
-On Windows those paths are usually:
-
-```text
-C:\Users\<you>\.codex\pets
-C:\Users\<you>\.codex\pet-runs
-```
-
-Each pet package should contain a `pet.json` and a Codex-compatible spritesheet such as `spritesheet.webp`.
+- Single active hook source selection to keep one coherent pet state.
+- Local HTTP API for state updates, pet selection, hook status, and external integrations.
+- Session aggregation and debounced `working -> thinking` transitions to avoid flicker during tool chains.
 
 ## Requirements
 
 - Node.js 18+
 - npm
-- Windows, macOS, or Linux with Electron support
+- Electron-supported Windows, macOS, or Linux
 
-Real hook support depends on the agent being installed and able to load its hook configuration:
-
-| Agent | Config written by this project |
-| --- | --- |
-| Codex | `~/.codex/hooks.json` and `~/.codex/config.toml` |
-| Claude Code | `~/.claude/settings.json` |
-| CodeBuddy | `~/.codebuddy/settings.json` |
+Real hook support requires the target agent to be installed and able to load its own hook configuration.
 
 ## Quick Start
 
@@ -100,10 +55,16 @@ Install dependencies:
 npm install
 ```
 
-Start the pet:
+Start the app:
 
 ```bash
 npm start
+```
+
+Run tests:
+
+```bash
+npm test
 ```
 
 The local API listens on:
@@ -116,20 +77,68 @@ Optional environment variables:
 
 ```bash
 PET_PORT=17862 npm start
-PET_ID=xiao-jin npm start
+PET_ID=boba npm start
 ```
 
-On PowerShell:
+PowerShell:
 
 ```powershell
 $env:PET_PORT = "17862"
-$env:PET_ID = "xiao-jin"
+$env:PET_ID = "boba"
 npm start
 ```
 
+## Pet Storage
+
+By default, Desktop Pet Agent reads pets from:
+
+```text
+~/.codex/pets
+```
+
+On Windows:
+
+```text
+C:\Users\<you>\.codex\pets
+```
+
+The settings window can switch the active storage location:
+
+| Storage | Purpose |
+| --- | --- |
+| `.codex` pets | Default Codex-compatible pets directory. |
+| Custom folder | A user-selected folder. |
+
+Only the selected pets directory is loaded. Generated pet runs under `~/.codex/pet-runs` are not loaded automatically.
+
+Bundled pets under `src/assets/pets` are always available and are shown separately from pets in the selected user directory.
+
+## Pet Sources
+
+Open settings by double-clicking the pet or from the tray menu. The settings page keeps links to compatible pet galleries.
+
+Download a pet package from one of these sites, unzip it, then put the folder into the current pets directory or switch to a custom folder.
+
+| Site | Notes |
+| --- | --- |
+| Petdex | Browse and install/download Codex-compatible pets. |
+| Codex Pets | Browse shared Codex pet pages. |
+| SpriteYard | Browse animated Codex companion packages. |
+| Codex Pet Shop | Download zip packages and copy them into `~/.codex/pets`. |
+
+Please use only pets you have the right to use. Artwork remains owned by its original author or rights holder.
+
 ## Pet Format
 
-Desktop Pet Agent expects the same fixed atlas layout used by Codex pets:
+Each pet is a folder containing `pet.json` and a spritesheet:
+
+```text
+my-pet/
+  pet.json
+  spritesheet.webp
+```
+
+Expected atlas layout:
 
 ```text
 1536 x 1872 image
@@ -139,21 +148,21 @@ transparent background
 WebP or PNG
 ```
 
-The 9 rows map to these states:
+Rows map to the fixed Codex states:
 
-| State | Meaning |
-| --- | --- |
-| `idle` | idle / standing |
-| `running-right` | dragging or moving right |
-| `running-left` | dragging or moving left |
-| `waving` | reminder / notification |
-| `jumping` | done / happy jump |
-| `failed` | sleeping / failed |
-| `waiting` | waiting for input or permission |
-| `running` | working / coding |
-| `review` | thinking / reviewing |
+| Row | State | Meaning |
+| --- | --- | --- |
+| 0 | `idle` | idle / standing |
+| 1 | `running-right` | moving right while dragged |
+| 2 | `running-left` | moving left while dragged |
+| 3 | `waving` | reminder / notification |
+| 4 | `jumping` | done / happy jump |
+| 5 | `failed` | sleeping / failed |
+| 6 | `waiting` | waiting for input or permission |
+| 7 | `running` | working / coding |
+| 8 | `review` | thinking / reviewing |
 
-State aliases are also accepted:
+Accepted aliases:
 
 | Alias | Normalized state |
 | --- | --- |
@@ -174,23 +183,15 @@ Example `pet.json`:
 }
 ```
 
-## Settings
+## Agent Hooks
 
-Open settings by double-clicking the pet or from the tray menu.
+Supported hook integrations:
 
-The settings page supports:
-
-- selecting a pet from `~/.codex/pets` or `~/.codex/pet-runs`;
-- manually testing the fixed 9 action states;
-- changing pet size;
-- changing bubble size independently from pet size;
-- checking hook status for Codex, Claude Code, and CodeBuddy;
-- installing or repairing hook configuration;
-- selecting exactly one active hook source to listen to.
-
-Only one agent is actively listened to at a time. This keeps the UI consistent with the single-pet, single-bubble model. You can still install hooks for multiple agents, but choose the current one in the settings panel.
-
-## Real Hook Setup
+| Agent | Status | Config path | Events |
+| --- | --- | --- | --- |
+| Codex | Supported | `~/.codex/hooks.json`, `~/.codex/config.toml` | 10 |
+| Claude Code | Supported | `~/.claude/settings.json` | 6 |
+| CodeBuddy | Supported | `~/.codebuddy/settings.json` | 9 |
 
 Start the app before installing hooks:
 
@@ -204,7 +205,7 @@ Check hook status:
 npm run hooks:doctor
 ```
 
-Preview hook changes without writing user config:
+Preview hook changes without writing config:
 
 ```bash
 npm run hooks:preview
@@ -216,7 +217,7 @@ Install all supported hooks:
 npm run hooks:install
 ```
 
-Install one agent only:
+Install one agent:
 
 ```bash
 npm run hooks:install -- --agent codex
@@ -230,131 +231,27 @@ Uninstall only hooks managed by this project:
 npm run hooks:uninstall
 ```
 
-The installer only removes entries containing the project marker:
+Managed hooks contain this marker:
 
 ```text
 --desktop-pet-agent-managed
 ```
 
-Before writing an existing config file, it creates a backup:
+Existing config files are backed up before writes:
 
 ```text
 *.desktop-pet-agent-backup-<timestamp>
 ```
 
-### Codex
-
-Codex hooks are written to:
-
-```text
-~/.codex/hooks.json
-```
-
-The installer also enables hooks in:
-
-```text
-~/.codex/config.toml
-```
-
-by ensuring:
-
-```toml
-[features]
-hooks = true
-```
-
-Codex command hooks receive stdin JSON and this project forwards the payload to `/events`. The bridge prints `{}` to stdout so Codex hook events that require JSON output do not fail.
-
-### Claude Code
-
-Claude Code hooks are written to:
-
-```text
-~/.claude/settings.json
-```
-
-Claude Code uses an exec-style hook entry:
-
-```json
-{
-  "type": "command",
-  "command": "node",
-  "args": ["src/hook-bridge.js", "--source", "claude-code", "..."],
-  "timeout": 3,
-  "async": true,
-  "asyncRewake": false
-}
-```
-
-After installing hooks, restart Claude Code or start a new Claude Code session. In Claude Code, run:
-
-```text
-/hooks
-```
-
-to confirm the external hook configuration is loaded.
-
-### CodeBuddy
-
-CodeBuddy hooks are written to:
-
-```text
-~/.codebuddy/settings.json
-```
-
-CodeBuddy uses a Claude Code-compatible nested hook format:
-
-```json
-{
-  "matcher": "",
-  "hooks": [
-    {
-      "type": "command",
-      "command": "\"node\" \"src/hook-bridge.js\" --source codebuddy ..."
-    }
-  ]
-}
-```
-
-CodeBuddy integration installs 9 events:
-
-```text
-SessionStart
-SessionEnd
-UserPromptSubmit
-PreToolUse
-PostToolUse
-PermissionRequest
-Notification
-PreCompact
-Stop
-```
-
-`PermissionRequest` is installed as an HTTP hook:
-
-```text
-http://127.0.0.1:17861/permission?source=codebuddy&desktop-pet-agent-managed=1
-```
-
-On Windows, CodeBuddy executes hooks through Git Bash. This project quotes Windows paths in generated commands so paths like `D:\node\node.exe` are not broken by shell parsing.
-
-After installing hooks, restart CodeBuddy and run:
-
-```text
-/hooks
-```
-
-If CodeBuddy asks to approve external hook changes, approve the generated Desktop Pet Agent hooks.
-
 ## Hook Event Mapping
 
-The runtime normalizes agent events into the fixed pet states:
+Agent events are normalized into the fixed pet states:
 
 | Incoming event | Pet state |
 | --- | --- |
 | `SessionStart` | `waving`, then `review` |
 | `UserPromptSubmit` | `review` |
-| `PreToolUse` | `running` or `waiting` for test commands |
+| `PreToolUse` | `running`, or `waiting` for test-like commands |
 | `PostToolUse` | delayed `review` |
 | `PermissionRequest` | `waiting` |
 | `Notification` | `waving` |
@@ -387,16 +284,18 @@ List pets:
 curl http://127.0.0.1:17861/pets
 ```
 
+Select pet storage:
+
+```bash
+curl -X POST http://127.0.0.1:17861/pets/storage \
+  -H "Content-Type: application/json" \
+  -d '{"storage":"codex"}'
+```
+
 List actions:
 
 ```bash
 curl http://127.0.0.1:17861/actions
-```
-
-Check hook status:
-
-```bash
-curl http://127.0.0.1:17861/hooks/status
 ```
 
 Show a manual state:
@@ -413,22 +312,6 @@ Send a generic agent event:
 curl -X POST http://127.0.0.1:17861/events \
   -H "Content-Type: application/json" \
   -d '{"source":"claude-code","event":"tool_start","sessionId":"demo","message":"Claude is using a tool"}'
-```
-
-Send a Claude Code or CodeBuddy-style hook payload:
-
-```bash
-curl -X POST http://127.0.0.1:17861/events \
-  -H "Content-Type: application/json" \
-  -d '{"source":"codebuddy","hook_event_name":"UserPromptSubmit","session_id":"demo"}'
-```
-
-Send an OpenPets-style reaction:
-
-```bash
-curl -X POST http://127.0.0.1:17861/events \
-  -H "Content-Type: application/json" \
-  -d '{"source":"openpets","reaction":"thinking","sessionId":"demo"}'
 ```
 
 Select active hook source:
@@ -453,21 +336,11 @@ Clear sessions:
 curl -X POST http://127.0.0.1:17861/sessions/clear
 ```
 
-PowerShell 5.1 users should send UTF-8 bytes explicitly when sending Chinese text:
-
-```powershell
-$body = '{"state":"thinking","message":"正在思考"}'
-Invoke-RestMethod `
-  -Method Post `
-  -Uri http://127.0.0.1:17861/state `
-  -ContentType "application/json; charset=utf-8" `
-  -Body ([System.Text.Encoding]::UTF8.GetBytes($body))
-```
-
-## Architecture
+## Project Structure
 
 ```text
 src/main.js                  Electron main process, windows, settings, HTTP API
+src/pet-library.js           Pet discovery and storage selection
 src/agent-events.js          Agent event normalization and state mapping
 src/session-manager.js       Session aggregation and priority state selection
 src/hook-bridge.js           Hook stdin JSON -> local /events bridge
@@ -475,20 +348,16 @@ src/hook-installer.js        Codex, Claude Code, CodeBuddy hook installer
 src/preload.js               Safe IPC bridge
 src/renderer/index.html      Transparent pet window
 src/renderer/renderer.js     Spritesheet player, dragging, resizing
-src/renderer/styles.css      Pet window styles
 src/renderer/bubble.html     Independent message bubble window
-src/renderer/bubble.js       Bubble measurement and rendering
-src/renderer/bubble.css      Bubble styles
 src/renderer/settings.html   Settings window
-src/renderer/settings.js     Settings logic
-src/renderer/settings.css    Settings styles
+test/pet-library.test.js     Pet loading and storage tests
 ```
 
 ## Security And Privacy
 
-- The runtime only listens on `127.0.0.1` by default.
+- The runtime listens on `127.0.0.1` by default.
 - Hook payloads may include prompts, tool names, paths, or command summaries depending on the agent.
-- Payloads are forwarded to the local pet runtime only; this project does not send them to a remote service.
+- Payloads are forwarded only to the local runtime; this project does not upload hook data.
 - Recent hook events are kept in memory for the settings panel and are not persisted by this app.
 - The hook installer modifies only managed hook entries marked by this project.
 - Existing agent config files are backed up before writes.
@@ -497,11 +366,10 @@ src/renderer/settings.css    Settings styles
 
 ### No pet appears
 
-Check that at least one pet package exists under:
+Check that at least one pet package exists under the currently selected pets directory. The default is:
 
 ```text
 ~/.codex/pets
-~/.codex/pet-runs
 ```
 
 Then open:
@@ -509,6 +377,10 @@ Then open:
 ```text
 http://127.0.0.1:17861/pets
 ```
+
+### Downloaded pet does not appear
+
+Confirm the pet folder is inside the currently selected pets directory and contains both `pet.json` and a valid `spritesheet.webp` or `spritesheet.png`.
 
 ### Hook status is green but no event appears
 
@@ -532,13 +404,13 @@ npm run hooks:install -- --agent codebuddy
 
 The generated command should quote Windows paths.
 
-### Chinese text appears as question marks
+### Tray icon does not show
 
-Use `Content-Type: application/json; charset=utf-8` and send UTF-8 bytes. See the PowerShell example in the HTTP API section.
+The app keeps its persistent entry in the system tray instead of the main taskbar. If the tray icon does not update immediately on Windows, quit the app completely and start it again so Electron reloads the icon and AppUserModelID.
 
 ### Bubble flickers between working and thinking
 
-The runtime debounces `PostToolUse -> review` transitions. If flicker still occurs, check whether another active hook source is sending events. The settings page should show which agent is currently selected.
+The runtime debounces `PostToolUse -> review` transitions. If flicker still occurs, check whether another active hook source is sending events. The settings page shows the currently selected source.
 
 ## Development
 
@@ -548,40 +420,33 @@ Start in dev mode:
 npm run dev
 ```
 
+Run tests:
+
+```bash
+npm test
+```
+
 Run syntax checks manually:
 
 ```bash
 node --check src/main.js
+node --check src/pet-library.js
 node --check src/hook-installer.js
 node --check src/hook-bridge.js
 ```
 
-The project currently does not include a packaged release pipeline. For local hacking, `npm start` is the main workflow.
-
 ## Contributing
 
-Desktop Pet Agent is small on purpose: one pet runtime, one local API, and a clear hook adapter layer. The most valuable PRs are integrations and hard compatibility fixes.
+Useful PRs include:
 
-Good PR targets:
+- new agent hook installers;
+- hook detection fixes for existing agents;
+- Windows, macOS, or Linux compatibility fixes;
+- packaged release support;
+- tests for hook installer and pet loading edge cases;
+- better Codex-compatible pet validation.
 
-- add a new agent hook installer;
-- improve hook detection for an existing agent;
-- add platform-specific fixes for Windows, macOS, or Linux;
-- add packaged release support;
-- add tests for hook installer edge cases;
-- improve Codex-compatible pet loading and validation;
-- add documentation for real-world agent setup flows.
-
-For a new agent integration, please include:
-
-- config path and schema documentation;
-- install, doctor, preview, and uninstall behavior;
-- event mapping into the 9 fixed pet states;
-- stdout or HTTP response requirements for blocking hooks;
-- a manual verification command or test script;
-- notes about restart, approval, or security prompts in the target agent.
-
-PRs that make more agents work reliably are especially welcome. The goal is to make this a shared desktop companion layer for the agent ecosystem, not a one-off integration.
+For a new agent integration, include config path documentation, install/doctor/preview/uninstall behavior, event mapping into the 9 fixed states, and restart or approval notes for the target agent.
 
 ## License
 
