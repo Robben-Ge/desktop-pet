@@ -97,8 +97,9 @@ body {
   bottom: var(--handle-bottom);
   width: 26px;
   height: 26px;
-  display: grid;
-  place-items: center;
+  display: block;
+  padding: 0;
+  margin: 0;
   border: 1px solid rgba(20, 32, 48, 0.1);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.86);
@@ -110,6 +111,7 @@ body {
   opacity: 0;
   transform: translateY(2px) scale(0.94);
   transition: opacity 140ms ease, transform 140ms ease, background-color 140ms ease, border-color 140ms ease;
+  appearance: none;
   -webkit-app-region: no-drag;
   touch-action: none;
   pointer-events: none;
@@ -138,11 +140,15 @@ body {
 }
 
 .resize-icon {
+  position: absolute;
+  left: 50%;
+  top: 50%;
   width: 18px;
   height: 18px;
   display: block;
   pointer-events: none;
   object-fit: contain;
+  transform: translate(-50%, -50%);
 }
 
 .sprite.ready {
