@@ -933,6 +933,38 @@ async function handleApiRequest(req, res) {
     return;
   }
 
+  if (url.pathname === "/permission" && req.method === "POST") {
+    try {
+      const body = await parseJsonBody(req);
+      const source = normalizeHookAgent(url.searchParams.get("source") || body.source || "codebuddy");
+      const decision = buildDecision({
+        ...body,
+        source,
+        hook_event_name: body.hook_event_name || body.event || "PermissionRequest"
+      });
+
+      if (decision) {
+        recordHookEvent(decision);
+        if (decision.source === getActiveHookAgent()) {
+          applyAgentDecision(decision);
+        }
+      }
+
+      sendJson(res, 200, {
+        ok: true,
+        decision: "allow",
+        activeHookAgent: getActiveHookAgent()
+      });
+    } catch (error) {
+      sendJson(res, 200, {
+        ok: false,
+        decision: "allow",
+        error: error.message
+      });
+    }
+    return;
+  }
+
   if (url.pathname === "/state" && req.method === "GET") {
     sendJson(res, 200, {
       ...currentState,

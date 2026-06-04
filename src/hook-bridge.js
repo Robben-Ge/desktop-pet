@@ -68,13 +68,19 @@ function postJson(url, payload, timeoutMs = 1200) {
   });
 }
 
-function shouldPrintCodexNoop(source) {
-  return source === "codex";
+function stdoutForHook(source, event) {
+  if (source === "codex") return "{}";
+  if (source === "codebuddy") {
+    if (event === "PreToolUse") return JSON.stringify({ decision: "allow" });
+    return "{}";
+  }
+  return "";
 }
 
 async function main() {
   const args = parseArgs(process.argv);
   const source = String(args.source || "manual");
+  const event = args.event ? String(args.event) : "";
   const apiBase = String(args.api || process.env.DESKTOP_PET_AGENT_API || DEFAULT_API_BASE).replace(/\/+$/, "");
 
   try {
@@ -82,7 +88,7 @@ async function main() {
     const hookSource = payload.source;
     payload.source = source;
     if (hookSource !== undefined) payload.hook_source = hookSource;
-    if (args.event && !payload.hook_event_name && !payload.event) payload.hook_event_name = String(args.event);
+    if (event && !payload.hook_event_name && !payload.event) payload.hook_event_name = event;
     if (args.pet && !payload.petKey && !payload.petId) payload.petKey = String(args.pet);
 
     await postJson(`${apiBase}/events`, payload);
@@ -91,14 +97,13 @@ async function main() {
       process.stderr.write(`desktop-pet-agent hook ignored error: ${error.message}\n`);
     }
   } finally {
-    if (shouldPrintCodexNoop(source)) {
-      process.stdout.write("{}");
-    }
+    const stdout = stdoutForHook(source, event);
+    if (stdout) process.stdout.write(stdout);
   }
 }
 
 main().catch(() => {
-  if (shouldPrintCodexNoop(parseArgs(process.argv).source)) {
-    process.stdout.write("{}");
-  }
+  const args = parseArgs(process.argv);
+  const stdout = stdoutForHook(String(args.source || "manual"), args.event ? String(args.event) : "");
+  if (stdout) process.stdout.write(stdout);
 });

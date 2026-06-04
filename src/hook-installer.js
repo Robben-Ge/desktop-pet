@@ -5,6 +5,7 @@ const os = require("node:os");
 const path = require("node:path");
 
 const MARKER = "--desktop-pet-agent-managed";
+const HTTP_MARKER = "desktop-pet-agent-managed";
 const API_BASE = "http://127.0.0.1:17861";
 
 const AGENT_CONFIGS = {
@@ -20,6 +21,8 @@ const AGENT_CONFIGS = {
     label: "CodeBuddy",
     settingsPath: () => path.join(os.homedir(), ".codebuddy", "settings.json"),
     format: "claude",
+    includeMatcher: true,
+    permissionHttp: true,
     source: "codebuddy",
     events: [
       "SessionStart",
@@ -27,6 +30,7 @@ const AGENT_CONFIGS = {
       "UserPromptSubmit",
       "PreToolUse",
       "PostToolUse",
+      "PermissionRequest",
       "Notification",
       "PreCompact",
       "Stop"
@@ -95,6 +99,10 @@ function backupFile(filePath) {
 }
 
 function shellQuote(value) {
+  if (/^[a-zA-Z]:[\\/]/.test(value)) {
+    if (/[\r\n"\0]/.test(value)) throw new Error(`Unsupported command path: ${value}`);
+    return `"${value}"`;
+  }
   if (/^[a-zA-Z0-9_@%+=:,./\\-]+$/.test(value)) return value;
   if (/[\r\n"\0]/.test(value)) throw new Error(`Unsupported command path: ${value}`);
   return `"${value}"`;
@@ -131,6 +139,15 @@ function buildBridgeCommand(agent, event, options = {}) {
   ].join(" ");
 }
 
+function buildPermissionUrl(agent, options = {}) {
+  const apiBase = String(options.apiBase || API_BASE).replace(/\/+$/, "");
+  const params = new URLSearchParams({
+    source: agent.source,
+    [HTTP_MARKER]: "1"
+  });
+  return `${apiBase}/permission?${params.toString()}`;
+}
+
 function resolveNodeBin() {
   const candidates = [
     process.env.DESKTOP_PET_AGENT_NODE,
@@ -163,6 +180,7 @@ function findNodeOnPath() {
 
 function managedHookUsesNode(value) {
   if (!value || typeof value !== "object") return true;
+  if (hasManagedHttpUrl(value)) return true;
   for (const key of ["command", "commandWindows"]) {
     const command = value[key];
     if (typeof command === "string" && command.includes(MARKER)) {
@@ -182,12 +200,17 @@ function containsManagedHook(value) {
   if (typeof value.command === "string" && value.command.includes(MARKER)) return true;
   if (typeof value.commandWindows === "string" && value.commandWindows.includes(MARKER)) return true;
   if (hasManagedArgs(value)) return true;
+  if (hasManagedHttpUrl(value)) return true;
   if (Array.isArray(value.hooks)) return value.hooks.some(containsManagedHook);
   return false;
 }
 
 function hasManagedArgs(value) {
   return Array.isArray(value?.args) && value.args.some((arg) => String(arg).includes(MARKER));
+}
+
+function hasManagedHttpUrl(value) {
+  return typeof value?.url === "string" && value.url.includes(HTTP_MARKER);
 }
 
 function managedHookUsesArgs(value) {
@@ -231,9 +254,21 @@ function removeManagedHooks(settings) {
 }
 
 function createClaudeHookEntry(agent, event, options = {}) {
+  if (agent.permissionHttp && event === "PermissionRequest") {
+    const entry = {
+      hooks: [{
+        type: "http",
+        url: buildPermissionUrl(agent, options),
+        timeout: 3
+      }]
+    };
+    if (agent.includeMatcher) entry.matcher = "";
+    return entry;
+  }
+
   if (agent.useArgs) {
     const parts = buildBridgeCommandParts(agent, event, options);
-    return {
+    const entry = {
       hooks: [{
         type: "command",
         command: parts.nodeBin,
@@ -243,10 +278,12 @@ function createClaudeHookEntry(agent, event, options = {}) {
         asyncRewake: false
       }]
     };
+    if (agent.includeMatcher) entry.matcher = "";
+    return entry;
   }
 
   const command = buildBridgeCommand(agent, event, options);
-  return {
+  const entry = {
     hooks: [{
       type: "command",
       command,
@@ -255,6 +292,8 @@ function createClaudeHookEntry(agent, event, options = {}) {
       asyncRewake: false
     }]
   };
+  if (agent.includeMatcher) entry.matcher = "";
+  return entry;
 }
 
 function codexMatcherForEvent(event) {
@@ -527,6 +566,7 @@ module.exports = {
   AGENT_CONFIGS,
   MARKER,
   buildBridgeCommand,
+  buildPermissionUrl,
   doctorHooks,
   installHooks,
   uninstallHooks,
