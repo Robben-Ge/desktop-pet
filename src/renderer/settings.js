@@ -3,6 +3,8 @@ const refreshBtn = document.getElementById("refreshBtn");
 const petCount = document.getElementById("petCount");
 const petList = document.getElementById("petList");
 const actionGrid = document.getElementById("actionGrid");
+const hookSummary = document.getElementById("hookSummary");
+const hookList = document.getElementById("hookList");
 const zoomInfo = document.getElementById("zoomInfo");
 const bubbleInfo = document.getElementById("bubbleInfo");
 const petsRoot = document.getElementById("petsRoot");
@@ -12,6 +14,13 @@ const settingsPath = document.getElementById("settingsPath");
 let activePetKey = "";
 let zoom = 1;
 let bubbleScale = 1;
+
+function createTextElement(tag, className, text) {
+  const element = document.createElement(tag);
+  if (className) element.className = className;
+  element.textContent = text;
+  return element;
+}
 
 function renderActions(actions) {
   actionGrid.innerHTML = "";
@@ -33,6 +42,47 @@ function renderActions(actions) {
       });
     });
     actionGrid.appendChild(button);
+  }
+}
+
+function renderHookStatus(hooks) {
+  const list = Array.isArray(hooks) ? hooks : [];
+  const okCount = list.filter((hook) => hook.state === "ok").length;
+  hookSummary.textContent = `${okCount}/${list.length} 已接入`;
+  hookList.innerHTML = "";
+
+  for (const hook of list) {
+    const item = document.createElement("article");
+    item.className = `hook-item ${hook.state || "missing"}`;
+
+    const lamp = document.createElement("span");
+    lamp.className = "hook-lamp";
+    lamp.setAttribute("aria-hidden", "true");
+
+    const body = document.createElement("div");
+    body.className = "hook-body";
+    body.appendChild(createTextElement("div", "hook-name", hook.label || hook.agent));
+
+    const reason = hook.reason || (hook.state === "ok" ? "已接入" : "未接入");
+    body.appendChild(createTextElement("div", "hook-reason", reason));
+
+    const meta = createTextElement(
+      "div",
+      "hook-meta",
+      `${hook.configuredCount || 0}/${hook.totalEvents || 0} events · ${hook.settingsPath || ""}`
+    );
+    body.appendChild(meta);
+
+    if (Array.isArray(hook.missing) && hook.missing.length > 0) {
+      body.appendChild(createTextElement("div", "hook-missing", `缺失：${hook.missing.join(", ")}`));
+    }
+
+    const badge = createTextElement("span", "hook-badge", hook.state === "ok" ? "OK" : (hook.state === "error" ? "ERROR" : "未接入"));
+
+    item.appendChild(lamp);
+    item.appendChild(body);
+    item.appendChild(badge);
+    hookList.appendChild(item);
   }
 }
 
@@ -77,6 +127,8 @@ async function loadSettings() {
   settingsPath.textContent = initial.config?.settingsPath || "";
   renderPets(initial.pets || []);
   renderActions(initial.actions || []);
+  renderHookStatus(initial.config?.hookStatus || []);
+  window.desktopPet.getHookStatus().then((result) => renderHookStatus(result.hooks || []));
 }
 
 window.desktopPet.onPetChange((pet) => {

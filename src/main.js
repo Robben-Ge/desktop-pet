@@ -5,6 +5,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
 const { AGENTS, buildDecision } = require("./agent-events");
+const { AGENT_CONFIGS, doctorHooks } = require("./hook-installer");
 const { SessionManager } = require("./session-manager");
 
 const API_HOST = "127.0.0.1";
@@ -473,6 +474,7 @@ function buildInitialPayload() {
       petRunsRoot: PET_RUNS_DIR,
       settingsPath: getSettingsPath(),
       agents: AGENTS,
+      hookStatus: getHookStatus(),
       zoom: clampZoom(settings.zoom || 1),
       minZoom: MIN_ZOOM,
       maxZoom: MAX_ZOOM,
@@ -483,6 +485,31 @@ function buildInitialPayload() {
       baseWindowHeight: BASE_WINDOW_HEIGHT
     }
   };
+}
+
+function getHookStatus() {
+  return Object.keys(AGENT_CONFIGS).map((agentId) => {
+    const result = doctorHooks(agentId);
+    const configuredCount = result.valid
+      ? AGENT_CONFIGS[agentId].events.length - result.missing.length
+      : 0;
+
+    return {
+      ...result,
+      totalEvents: AGENT_CONFIGS[agentId].events.length,
+      configuredCount,
+      state: result.status === "installed" ? "ok" : (result.status === "error" ? "error" : "missing"),
+      reason: describeHookStatus(result, configuredCount)
+    };
+  });
+}
+
+function describeHookStatus(result, configuredCount) {
+  if (result.status === "installed") return "已接入";
+  if (result.status === "error") return result.error || "配置文件无法解析";
+  if (!result.exists) return "配置文件不存在，尚未安装 hook";
+  if (configuredCount > 0) return `缺少 ${result.missing.length} 个事件`;
+  return "未发现本项目管理的 hook";
 }
 
 function resizePetWindow(zoomInput) {
@@ -616,6 +643,11 @@ async function handleApiRequest(req, res) {
 
   if (url.pathname === "/actions" && req.method === "GET") {
     sendJson(res, 200, { ok: true, actions: ACTIONS });
+    return;
+  }
+
+  if (url.pathname === "/hooks/status" && req.method === "GET") {
+    sendJson(res, 200, { ok: true, hooks: getHookStatus() });
     return;
   }
 
@@ -824,6 +856,9 @@ app.whenReady().then(() => {
       activePet: toPetPayload(activePet),
       actions: ACTIONS
     };
+  });
+  ipcMain.handle("pet:get-hook-status", () => {
+    return { ok: true, hooks: getHookStatus() };
   });
   ipcMain.handle("pet:select-pet", (_event, payload) => {
     const ok = selectPet(String(payload?.id || payload?.key || ""), payload?.source);

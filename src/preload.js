@@ -3,6 +3,7 @@ const { contextBridge, ipcRenderer } = require("electron");
 contextBridge.exposeInMainWorld("desktopPet", {
   getInitialState: () => ipcRenderer.invoke("pet:get-initial-state"),
   listPets: () => ipcRenderer.invoke("pet:list-pets"),
+  getHookStatus: () => ipcRenderer.invoke("pet:get-hook-status"),
   selectPet: (payload) => ipcRenderer.invoke("pet:select-pet", payload),
   setState: (payload) => ipcRenderer.invoke("pet:set-state", payload),
   getWindowBounds: () => ipcRenderer.invoke("pet:get-window-bounds"),
