@@ -1,4 +1,5 @@
 const { app, BrowserWindow, Menu, Tray, ipcMain, nativeImage, screen, shell, dialog } = require("electron");
+const { autoUpdater } = require("electron-updater");
 const fs = require("node:fs");
 const http = require("node:http");
 const os = require("node:os");
@@ -17,6 +18,7 @@ const API_PORT = Number(process.env.PET_PORT || 17861);
 const CODEX_HOME = process.env.CODEX_HOME || path.join(os.homedir(), ".codex");
 const LOGO_PATH = path.join(__dirname, "assets", "logo.png");
 const BUNDLED_PETS_ROOT = path.join(__dirname, "assets", "pets");
+const RELEASES_URL = "https://github.com/yangbuyiya/desktop-pet/releases";
 const BASE_WINDOW_WIDTH = 240;
 const BASE_WINDOW_HEIGHT = 286;
 const MIN_ZOOM = 0.65;
@@ -62,6 +64,20 @@ let agentReviewDebounceTimer = null;
 let pendingReviewDecision = null;
 let bubbleReady = false;
 let pendingBubblePayload = null;
+let updateCheckInProgress = false;
+let updateDownloadInProgress = false;
+let updateDownloaded = false;
+let updateInstallStarted = false;
+let updatePromptVisible = false;
+let pendingUpdateInfo = null;
+let updateStatus = {
+  status: "idle",
+  message: "尚未检查更新",
+  version: app.getVersion(),
+  progress: 0,
+  releaseUrl: RELEASES_URL,
+  updatedAt: new Date().toISOString()
+};
 const agentSessions = new SessionManager();
 let recentHookEvents = [];
 let currentState = {
@@ -267,6 +283,200 @@ function sendToWindows(channel, payload) {
       target.webContents.send(channel, payload);
     }
   }
+}
+
+function normalizeUpdateInfo(info = {}) {
+  return {
+    version: info.version || "",
+    releaseDate: info.releaseDate || "",
+    releaseName: info.releaseName || "",
+    releaseNotes: info.releaseNotes || ""
+  };
+}
+
+function setUpdateStatus(nextStatus) {
+  updateStatus = {
+    ...updateStatus,
+    ...nextStatus,
+    version: app.getVersion(),
+    releaseUrl: RELEASES_URL,
+    updatedAt: new Date().toISOString()
+  };
+  sendToWindows("pet:update-status", updateStatus);
+  return updateStatus;
+}
+
+function getUpdateStatus() {
+  return { ...updateStatus };
+}
+
+function configureDevUpdaterIfRequested() {
+  if (app.isPackaged) return true;
+  if (process.env.DESKTOP_PET_FORCE_DEV_UPDATE !== "1") return false;
+  autoUpdater.forceDevUpdateConfig = true;
+  autoUpdater.updateConfigPath = path.join(__dirname, "..", "dev-app-update.yml");
+  return true;
+}
+
+function isUpdateAvailableInThisRuntime(manual) {
+  if (configureDevUpdaterIfRequested()) return true;
+  if (manual) {
+    setUpdateStatus({
+      status: "disabled",
+      message: "开发模式不会检查自动更新，打包安装后可用",
+      progress: 0
+    });
+  }
+  return false;
+}
+
+function sendUpdateReadyPrompt(info) {
+  if (updatePromptVisible || updateInstallStarted) return;
+  updatePromptVisible = true;
+  const ownerWindow = settingsWin && !settingsWin.isDestroyed()
+    ? settingsWin
+    : (win && !win.isDestroyed() ? win : null);
+  const options = {
+    type: "info",
+    title: "更新已下载",
+    message: `Desktop Pet Agent ${info?.version || ""} 已下载完成`,
+    detail: "重启应用后会安装新版本。",
+    buttons: ["重启安装", "稍后"],
+    defaultId: 0,
+    cancelId: 1
+  };
+  const prompt = ownerWindow
+    ? dialog.showMessageBox(ownerWindow, options)
+    : dialog.showMessageBox(options);
+
+  prompt.then((result) => {
+    updatePromptVisible = false;
+    if (result.response === 0) installDownloadedUpdate();
+  }).catch((error) => {
+    updatePromptVisible = false;
+    console.warn(`Failed to show update prompt: ${error.message}`);
+  });
+}
+
+function setupAutoUpdater() {
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+
+  autoUpdater.on("checking-for-update", () => {
+    setUpdateStatus({
+      status: "checking",
+      message: "正在检查更新...",
+      progress: 0
+    });
+  });
+
+  autoUpdater.on("update-available", (info) => {
+    pendingUpdateInfo = normalizeUpdateInfo(info);
+    updateCheckInProgress = false;
+    updateDownloadInProgress = true;
+    setUpdateStatus({
+      status: "downloading",
+      message: `发现新版本 ${pendingUpdateInfo.version || ""}，正在下载...`,
+      progress: 0,
+      updateInfo: pendingUpdateInfo
+    });
+  });
+
+  autoUpdater.on("update-not-available", () => {
+    updateCheckInProgress = false;
+    updateDownloadInProgress = false;
+    setUpdateStatus({
+      status: "latest",
+      message: "当前已是最新版本",
+      progress: 0
+    });
+  });
+
+  autoUpdater.on("download-progress", (progress) => {
+    const percent = Number(progress?.percent) || 0;
+    setUpdateStatus({
+      status: "downloading",
+      message: `正在下载更新 ${Math.round(percent)}%`,
+      progress: Math.max(0, Math.min(100, percent)),
+      transferred: progress?.transferred || 0,
+      total: progress?.total || 0,
+      bytesPerSecond: progress?.bytesPerSecond || 0,
+      updateInfo: pendingUpdateInfo
+    });
+  });
+
+  autoUpdater.on("update-downloaded", (info) => {
+    pendingUpdateInfo = normalizeUpdateInfo(info);
+    updateCheckInProgress = false;
+    updateDownloadInProgress = false;
+    updateDownloaded = true;
+    setUpdateStatus({
+      status: "ready",
+      message: `新版本 ${pendingUpdateInfo.version || ""} 已下载，重启后安装`,
+      progress: 100,
+      updateInfo: pendingUpdateInfo
+    });
+    sendUpdateReadyPrompt(pendingUpdateInfo);
+  });
+
+  autoUpdater.on("error", (error) => {
+    updateCheckInProgress = false;
+    updateDownloadInProgress = false;
+    setUpdateStatus({
+      status: "error",
+      message: error?.message || "自动更新检查失败",
+      progress: 0,
+      updateInfo: pendingUpdateInfo
+    });
+  });
+}
+
+async function checkForUpdates(manual = false) {
+  if (updateDownloaded) {
+    return setUpdateStatus({
+      status: "ready",
+      message: `新版本 ${pendingUpdateInfo?.version || ""} 已下载，重启后安装`,
+      progress: 100,
+      updateInfo: pendingUpdateInfo
+    });
+  }
+
+  if (updateCheckInProgress || updateDownloadInProgress) {
+    return setUpdateStatus({
+      status: updateDownloadInProgress ? "downloading" : "checking",
+      message: updateDownloadInProgress ? "更新正在下载中..." : "正在检查更新...",
+      updateInfo: pendingUpdateInfo
+    });
+  }
+
+  if (!isUpdateAvailableInThisRuntime(manual)) return getUpdateStatus();
+
+  updateCheckInProgress = true;
+  try {
+    await autoUpdater.checkForUpdates();
+  } catch (error) {
+    updateCheckInProgress = false;
+    return setUpdateStatus({
+      status: "error",
+      message: error?.message || "自动更新检查失败",
+      progress: 0
+    });
+  }
+
+  return getUpdateStatus();
+}
+
+function installDownloadedUpdate() {
+  if (!updateDownloaded || updateInstallStarted) return getUpdateStatus();
+  updateInstallStarted = true;
+  setUpdateStatus({
+    status: "installing",
+    message: "正在重启并安装更新...",
+    progress: 100,
+    updateInfo: pendingUpdateInfo
+  });
+  setImmediate(() => autoUpdater.quitAndInstall(true, true));
+  return getUpdateStatus();
 }
 
 function clamp(value, min, max) {
@@ -580,7 +790,10 @@ function buildInitialPayload() {
       minBubbleScale: MIN_BUBBLE_SCALE,
       maxBubbleScale: MAX_BUBBLE_SCALE,
       baseWindowWidth: BASE_WINDOW_WIDTH,
-      baseWindowHeight: BASE_WINDOW_HEIGHT
+      baseWindowHeight: BASE_WINDOW_HEIGHT,
+      appVersion: app.getVersion(),
+      releaseUrl: RELEASES_URL,
+      updateStatus: getUpdateStatus()
     }
   };
 }
@@ -1067,6 +1280,10 @@ function createTray() {
       click: () => createSettingsWindow()
     },
     {
+      label: "Check for Updates",
+      click: () => checkForUpdates(true)
+    },
+    {
       type: "separator"
     },
     {
@@ -1088,11 +1305,19 @@ function createTray() {
   ]));
 }
 
+function configureMacMenuBarMode() {
+  if (process.platform !== "darwin") return;
+  app.setActivationPolicy("accessory");
+  app.dock.hide();
+}
+
 app.whenReady().then(() => {
   app.setName("Desktop Pet Agent");
+  configureMacMenuBarMode();
   if (process.platform === "win32") app.setAppUserModelId("com.desktop-pet-agent.app");
   loadSettings();
   discoverPets();
+  setupAutoUpdater();
   createWindow();
   createBubbleWindow();
   createTray();
@@ -1111,6 +1336,19 @@ app.whenReady().then(() => {
   });
   ipcMain.handle("pet:get-hook-status", () => {
     return { ok: true, hooks: getHookStatus() };
+  });
+  ipcMain.handle("pet:get-update-status", () => {
+    return { ok: true, update: getUpdateStatus() };
+  });
+  ipcMain.handle("pet:check-for-updates", async () => {
+    return { ok: true, update: await checkForUpdates(true) };
+  });
+  ipcMain.handle("pet:install-update", () => {
+    return { ok: true, update: installDownloadedUpdate() };
+  });
+  ipcMain.handle("pet:open-releases", async () => {
+    await shell.openExternal(RELEASES_URL);
+    return { ok: true };
   });
   ipcMain.handle("pet:install-hooks", (_event, payload) => {
     try {
@@ -1220,6 +1458,12 @@ app.whenReady().then(() => {
     }
   });
   ipcMain.on("pet:open-settings", () => createSettingsWindow());
+
+  setTimeout(() => {
+    checkForUpdates(false).catch((error) => {
+      console.warn(`Silent update check failed: ${error.message}`);
+    });
+  }, 5000);
 });
 
 app.on("window-all-closed", (event) => {

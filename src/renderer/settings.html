@@ -124,6 +124,31 @@
             </div>
           </section>
 
+          <section class="panel update-panel" id="updatePanel">
+            <div class="panel-title-row">
+              <div>
+                <span class="eyebrow">版本</span>
+                <h2>应用更新</h2>
+              </div>
+              <span id="appVersion" class="summary-pill">v0.0.0</span>
+            </div>
+            <div class="update-status-row">
+              <span id="updateLamp" class="update-lamp" aria-hidden="true"></span>
+              <div class="update-copy">
+                <strong id="updateState">尚未检查</strong>
+                <span id="updateMessage">等待检查更新</span>
+              </div>
+            </div>
+            <div class="update-progress" aria-hidden="true">
+              <span id="updateProgressBar"></span>
+            </div>
+            <div class="update-actions">
+              <button id="checkUpdateBtn" type="button" class="primary">检查更新</button>
+              <button id="installUpdateBtn" type="button" hidden>重启安装</button>
+              <button id="openReleasesBtn" type="button">打开 Releases</button>
+            </div>
+          </section>
+
           <section class="panel">
             <div id="petList" class="pet-list"></div>
           </section>

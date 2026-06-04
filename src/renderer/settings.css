@@ -578,6 +578,94 @@ dd {
   white-space: nowrap;
 }
 
+.update-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.update-status-row {
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr);
+  gap: 11px;
+  align-items: start;
+  padding: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.update-lamp {
+  width: 9px;
+  height: 9px;
+  margin-top: 5px;
+  border-radius: 50%;
+  background: var(--faint);
+  box-shadow: 0 0 0 4px rgba(148, 163, 184, 0.14);
+}
+
+.update-lamp.is-checking,
+.update-lamp.is-downloading,
+.update-lamp.is-installing {
+  background: var(--blue);
+  box-shadow: 0 0 0 4px rgba(10, 132, 255, 0.13);
+}
+
+.update-lamp.is-ready {
+  background: var(--orange);
+  box-shadow: 0 0 0 4px rgba(255, 159, 10, 0.14);
+}
+
+.update-lamp.is-latest {
+  background: var(--green);
+  box-shadow: 0 0 0 4px rgba(48, 209, 88, 0.14);
+}
+
+.update-lamp.is-error {
+  background: var(--red);
+  box-shadow: 0 0 0 4px rgba(255, 69, 58, 0.12);
+}
+
+.update-copy {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.update-copy strong {
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.25;
+}
+
+.update-copy span {
+  overflow-wrap: anywhere;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.42;
+}
+
+.update-progress {
+  height: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(226, 232, 240, 0.72);
+}
+
+.update-progress span {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--blue), var(--green));
+  transition: width 180ms ease;
+}
+
+.update-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .pet-list {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));

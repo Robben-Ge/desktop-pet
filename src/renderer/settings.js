@@ -9,6 +9,15 @@ const hookSummary = document.getElementById("hookSummary");
 const hookList = document.getElementById("hookList");
 const zoomInfo = document.getElementById("zoomInfo");
 const bubbleInfo = document.getElementById("bubbleInfo");
+const appVersion = document.getElementById("appVersion");
+const updatePanel = document.getElementById("updatePanel");
+const updateLamp = document.getElementById("updateLamp");
+const updateState = document.getElementById("updateState");
+const updateMessage = document.getElementById("updateMessage");
+const updateProgressBar = document.getElementById("updateProgressBar");
+const checkUpdateBtn = document.getElementById("checkUpdateBtn");
+const installUpdateBtn = document.getElementById("installUpdateBtn");
+const openReleasesBtn = document.getElementById("openReleasesBtn");
 const storageName = document.getElementById("storageName");
 const petsRoot = document.getElementById("petsRoot");
 const codexPetsRoot = document.getElementById("codexPetsRoot");
@@ -22,6 +31,18 @@ let installingHookAgent = "";
 let activeHookAgent = "codex";
 let currentStorage = "codex";
 let currentCustomPetsRoot = "";
+let currentUpdateStatus = "idle";
+
+const UPDATE_STATUS_LABELS = {
+  idle: "尚未检查",
+  disabled: "开发模式",
+  checking: "正在检查",
+  downloading: "正在下载",
+  ready: "等待安装",
+  installing: "正在安装",
+  latest: "已是最新",
+  error: "检查失败"
+};
 
 function createTextElement(tag, className, text) {
   const element = document.createElement(tag);
@@ -123,6 +144,25 @@ function renderHookStatus(hooks) {
     item.appendChild(actions);
     hookList.appendChild(item);
   }
+}
+
+function renderUpdateStatus(update) {
+  const payload = update || {};
+  const status = payload.status || "idle";
+  const progress = Math.max(0, Math.min(100, Number(payload.progress) || 0));
+  currentUpdateStatus = status;
+
+  appVersion.textContent = `v${payload.version || ""}`;
+  updatePanel.dataset.status = status;
+  updateLamp.className = `update-lamp is-${status}`;
+  updateState.textContent = UPDATE_STATUS_LABELS[status] || status;
+  updateMessage.textContent = payload.message || "等待检查更新";
+  updateProgressBar.style.width = `${progress}%`;
+
+  const busy = status === "checking" || status === "downloading" || status === "installing";
+  checkUpdateBtn.disabled = busy;
+  checkUpdateBtn.textContent = busy ? "处理中..." : "检查更新";
+  installUpdateBtn.hidden = status !== "ready";
 }
 
 async function selectHookAgent(hook) {
@@ -235,6 +275,7 @@ async function loadSettings() {
   zoom = Number(initial.config?.zoom) || 1;
   bubbleScale = Number(initial.config?.bubbleScale) || 1;
   activeHookAgent = initial.config?.activeHookAgent || "codex";
+  renderUpdateStatus(initial.config?.updateStatus || { version: initial.config?.appVersion });
   zoomInfo.textContent = `${Math.round(zoom * 100)}%`;
   bubbleInfo.textContent = `${Math.round(bubbleScale * 100)}%`;
   apiInfo.textContent = initial.config?.apiBaseUrl || "";
@@ -249,6 +290,7 @@ async function loadSettings() {
   renderActions(initial.actions || []);
   renderHookStatus(initial.config?.hookStatus || []);
   window.desktopPet.getHookStatus().then((result) => renderHookStatus(result.hooks || []));
+  window.desktopPet.getUpdateStatus().then((result) => renderUpdateStatus(result.update));
 }
 
 window.desktopPet.onPetChange((pet) => {
@@ -264,8 +306,29 @@ window.desktopPet.onBubbleScaleChange((payload) => {
   bubbleScale = Number(payload?.bubbleScale) || bubbleScale;
   bubbleInfo.textContent = `${Math.round(bubbleScale * 100)}%`;
 });
+window.desktopPet.onUpdateStatus((payload) => renderUpdateStatus(payload));
 
 refreshBtn.addEventListener("click", loadSettings);
+
+checkUpdateBtn.addEventListener("click", async () => {
+  renderUpdateStatus({
+    status: "checking",
+    message: "正在检查更新...",
+    version: appVersion.textContent.replace(/^v/, "")
+  });
+  const result = await window.desktopPet.checkForUpdates();
+  if (result.update) renderUpdateStatus(result.update);
+});
+
+installUpdateBtn.addEventListener("click", async () => {
+  if (currentUpdateStatus !== "ready") return;
+  const result = await window.desktopPet.installUpdate();
+  if (result.update) renderUpdateStatus(result.update);
+});
+
+openReleasesBtn.addEventListener("click", () => {
+  window.desktopPet.openReleases();
+});
 
 storageTabs.querySelectorAll("[data-storage]").forEach((button) => {
   button.addEventListener("click", async () => {

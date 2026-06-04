@@ -6,6 +6,10 @@ contextBridge.exposeInMainWorld("desktopPet", {
   getHookStatus: () => ipcRenderer.invoke("pet:get-hook-status"),
   installHooks: (payload) => ipcRenderer.invoke("pet:install-hooks", payload),
   selectHookAgent: (payload) => ipcRenderer.invoke("pet:select-hook-agent", payload),
+  getUpdateStatus: () => ipcRenderer.invoke("pet:get-update-status"),
+  checkForUpdates: () => ipcRenderer.invoke("pet:check-for-updates"),
+  installUpdate: () => ipcRenderer.invoke("pet:install-update"),
+  openReleases: () => ipcRenderer.invoke("pet:open-releases"),
   selectPet: (payload) => ipcRenderer.invoke("pet:select-pet", payload),
   selectPetStorage: (payload) => ipcRenderer.invoke("pet:select-storage", payload),
   chooseCustomPetStorage: () => ipcRenderer.invoke("pet:choose-custom-storage"),
@@ -39,6 +43,11 @@ contextBridge.exposeInMainWorld("desktopPet", {
     const listener = (_event, payload) => callback(payload);
     ipcRenderer.on("pet:set-bubble-scale", listener);
     return () => ipcRenderer.removeListener("pet:set-bubble-scale", listener);
+  },
+  onUpdateStatus: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on("pet:update-status", listener);
+    return () => ipcRenderer.removeListener("pet:update-status", listener);
   },
   onBubbleMessage: (callback) => {
     const listener = (_event, payload) => callback(payload);
