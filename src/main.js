@@ -484,15 +484,19 @@ function getWindowPlacement() {
 
 function parseJsonBody(req) {
   return new Promise((resolve, reject) => {
-    let body = "";
+    const chunks = [];
+    let byteLength = 0;
     req.on("data", (chunk) => {
-      body += chunk;
-      if (body.length > 1024 * 64) {
+      chunks.push(chunk);
+      byteLength += chunk.length;
+      if (byteLength > 1024 * 64) {
         reject(new Error("Request body too large"));
         req.destroy();
       }
     });
     req.on("end", () => {
+      const buffer = Buffer.concat(chunks);
+      const body = decodeRequestBody(buffer, req.headers["content-type"]);
       if (!body.trim()) {
         resolve({});
         return;
@@ -505,6 +509,24 @@ function parseJsonBody(req) {
     });
     req.on("error", reject);
   });
+}
+
+function decodeRequestBody(buffer, contentType = "") {
+  const charset = String(contentType).match(/charset=([^;]+)/i)?.[1]?.trim().toLowerCase();
+
+  if (charset) {
+    try {
+      return new TextDecoder(charset).decode(buffer);
+    } catch {
+      // Fall through to tolerant defaults.
+    }
+  }
+
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(buffer);
+  } catch {
+    return new TextDecoder("gb18030").decode(buffer);
+  }
 }
 
 function sendJson(res, statusCode, payload) {

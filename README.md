@@ -126,32 +126,37 @@ Invoke-RestMethod `
 切换状态：
 
 ```powershell
+$body = '{"state":"working","message":"Codex 正在敲代码"}'
 Invoke-RestMethod `
   -Method Post `
   -Uri http://127.0.0.1:17861/state `
-  -ContentType "application/json" `
-  -Body '{"state":"working","message":"Codex 正在敲代码"}'
+  -ContentType "application/json; charset=utf-8" `
+  -Body ([System.Text.Encoding]::UTF8.GetBytes($body))
 ```
 
 短暂提醒后自动回到待机：
 
 ```powershell
+$body = '{"state":"done","message":"任务完成","durationMs":3000}'
 Invoke-RestMethod `
   -Method Post `
   -Uri http://127.0.0.1:17861/state `
-  -ContentType "application/json" `
-  -Body '{"state":"done","message":"任务完成","durationMs":3000}'
+  -ContentType "application/json; charset=utf-8" `
+  -Body ([System.Text.Encoding]::UTF8.GetBytes($body))
 ```
 
 切状态时顺带切宠物：
 
 ```powershell
+$body = '{"petKey":"pet-runs:xiao-jin","state":"thinking","message":"正在思考"}'
 Invoke-RestMethod `
   -Method Post `
   -Uri http://127.0.0.1:17861/state `
-  -ContentType "application/json" `
-  -Body '{"petKey":"pet-runs:xiao-jin","state":"thinking","message":"正在思考"}'
+  -ContentType "application/json; charset=utf-8" `
+  -Body ([System.Text.Encoding]::UTF8.GetBytes($body))
 ```
+
+Windows PowerShell 5.1 里不要直接把中文 JSON 字符串传给 `-Body`，它可能按系统默认编码发送，气泡会显示 `????`。上面的写法会明确发送 UTF-8 字节。
 
 单独调整气泡大小：
 
