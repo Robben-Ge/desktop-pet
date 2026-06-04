@@ -4,88 +4,168 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Desktop Pet Agent Settings</title>
-    <link rel="icon" type="image/svg+xml" href="../assets/logo.svg" />
+    <link rel="icon" type="image/png" href="../assets/logo.png" />
     <link rel="stylesheet" href="./settings.css" />
   </head>
   <body>
     <main class="shell">
       <header class="topbar">
-        <div>
-          <h1>桌面宠物设置</h1>
-          <p id="apiInfo">Loading...</p>
+        <div class="brand-lockup">
+          <img src="../assets/logo.png" alt="" aria-hidden="true" />
+          <div>
+            <h1>桌面宠物设置</h1>
+            <p id="apiInfo">Loading...</p>
+          </div>
         </div>
-        <button id="refreshBtn" type="button">刷新</button>
+        <button id="refreshBtn" class="icon-command" type="button">刷新</button>
       </header>
 
-      <section class="section">
-        <div class="section-title">
-          <h2>宠物包</h2>
-          <span id="petCount">0</span>
-        </div>
-        <div id="petList" class="pet-list"></div>
-      </section>
+      <div class="settings-layout">
+        <aside class="control-rail">
+          <section class="panel storage-panel">
+            <div class="panel-heading">
+              <span class="eyebrow">存储</span>
+              <h2>宠物目录</h2>
+            </div>
+            <div id="storageTabs" class="storage-choice-grid" role="group" aria-label="宠物存储位置">
+              <button type="button" class="storage-option" data-storage="codex" aria-pressed="false">
+                <span class="storage-option-icon">⌂</span>
+                <span class="storage-option-copy">
+                  <strong>.codex 宠物</strong>
+                  <span>默认目录</span>
+                </span>
+                <span class="storage-option-check" aria-hidden="true"></span>
+              </button>
+              <button type="button" class="storage-option" data-storage="custom" aria-pressed="false">
+                <span class="storage-option-icon">⋯</span>
+                <span class="storage-option-copy">
+                  <strong>自定义文件夹</strong>
+                  <span>本地目录</span>
+                </span>
+                <span class="storage-option-check" aria-hidden="true"></span>
+              </button>
+            </div>
+            <div class="storage-current">
+              <div class="storage-current-head">
+                <span>当前存储</span>
+                <strong id="storageName">.codex 宠物</strong>
+              </div>
+              <code id="petsRoot"></code>
+              <div class="storage-actions">
+                <button type="button" class="storage-action primary" data-open-folder="current">打开当前</button>
+                <button type="button" class="storage-action" data-open-folder="codex">打开 .codex</button>
+                <button type="button" class="storage-action" id="chooseCustomBtn">选择自定义</button>
+              </div>
+            </div>
+            <dl class="paths storage-paths">
+              <div>
+                <dt>.codex</dt>
+                <dd id="codexPetsRoot"></dd>
+              </div>
+              <div>
+                <dt>自定义</dt>
+                <dd id="customPetsRoot"></dd>
+              </div>
+            </dl>
+          </section>
 
-      <section class="section">
-        <div class="section-title">
-          <h2>Agent Hooks</h2>
-          <span id="hookSummary">Checking...</span>
-        </div>
-        <div id="hookList" class="hook-list"></div>
-      </section>
+          <section class="panel sources-panel">
+            <div class="panel-heading">
+              <span class="eyebrow">渠道</span>
+              <h2>获取宠物</h2>
+              <p>从下列站点下载宠物包，解压后放入当前目录即可。</p>
+            </div>
+            <div class="source-grid" aria-label="宠物获取渠道">
+              <a href="https://petdex.crafter.run/zh" target="_blank" rel="noreferrer">Petdex</a>
+              <a href="https://codex-pets.net/" target="_blank" rel="noreferrer">Codex Pets</a>
+              <a href="https://spriteyard.com/" target="_blank" rel="noreferrer">SpriteYard</a>
+              <a href="https://www.codexpetshop.com/" target="_blank" rel="noreferrer">Pet Shop</a>
+            </div>
+          </section>
 
-      <section class="section">
-        <div class="section-title">
-          <h2>动作测试</h2>
-          <span>Codex 固定 9 行</span>
-        </div>
-        <div id="actionGrid" class="action-grid"></div>
-      </section>
+          <section class="panel tuning-panel">
+            <div class="panel-heading">
+              <span class="eyebrow">外观</span>
+              <h2>尺寸</h2>
+            </div>
+            <div class="control-row">
+              <span>宠物</span>
+              <strong id="zoomInfo">100%</strong>
+            </div>
+            <div class="segmented compact">
+              <button type="button" data-zoom="0.75">75</button>
+              <button type="button" data-zoom="1">100</button>
+              <button type="button" data-zoom="1.25">125</button>
+              <button type="button" data-zoom="1.5">150</button>
+            </div>
+            <div class="control-row">
+              <span>气泡</span>
+              <strong id="bubbleInfo">100%</strong>
+            </div>
+            <div class="segmented compact">
+              <button type="button" data-bubble-scale="0.85">85</button>
+              <button type="button" data-bubble-scale="1">100</button>
+              <button type="button" data-bubble-scale="1.2">120</button>
+              <button type="button" data-bubble-scale="1.4">140</button>
+            </div>
+          </section>
+        </aside>
 
-      <section class="section">
-        <div class="section-title">
-          <h2>尺寸</h2>
-          <span id="zoomInfo">100%</span>
-        </div>
-        <div class="size-grid">
-          <button type="button" data-zoom="0.75">75%</button>
-          <button type="button" data-zoom="1">100%</button>
-          <button type="button" data-zoom="1.25">125%</button>
-          <button type="button" data-zoom="1.5">150%</button>
-        </div>
-      </section>
+        <section class="content-stack">
+          <section class="panel hero-panel">
+            <div class="hero-copy">
+              <span class="eyebrow">当前工作区</span>
+              <h2>宠物库</h2>
+              <p>从当前目录加载 Codex 兼容宠物。目录里需要包含 `pet.json` 和 `spritesheet.webp`。</p>
+            </div>
+            <div class="hero-count">
+              <strong id="petCount">0</strong>
+              <span>只宠物</span>
+            </div>
+          </section>
 
-      <section class="section">
-        <div class="section-title">
-          <h2>气泡大小</h2>
-          <span id="bubbleInfo">100%</span>
-        </div>
-        <div class="size-grid">
-          <button type="button" data-bubble-scale="0.85">85%</button>
-          <button type="button" data-bubble-scale="1">100%</button>
-          <button type="button" data-bubble-scale="1.2">120%</button>
-          <button type="button" data-bubble-scale="1.4">140%</button>
-        </div>
-      </section>
+          <section class="panel">
+            <div id="petList" class="pet-list"></div>
+          </section>
 
-      <section class="section">
-        <div class="section-title">
-          <h2>目录</h2>
-        </div>
-        <dl class="paths">
-          <div>
-            <dt>pets</dt>
-            <dd id="petsRoot"></dd>
-          </div>
-          <div>
-            <dt>pet-runs</dt>
-            <dd id="petRunsRoot"></dd>
-          </div>
-          <div>
-            <dt>settings</dt>
-            <dd id="settingsPath"></dd>
-          </div>
-        </dl>
-      </section>
+          <section class="panel">
+            <div class="panel-title-row">
+              <div>
+                <span class="eyebrow">Agent</span>
+                <h2>Hook 状态</h2>
+              </div>
+              <span id="hookSummary" class="summary-pill">Checking...</span>
+            </div>
+            <div id="hookList" class="hook-list"></div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-title-row">
+              <div>
+                <span class="eyebrow">调试</span>
+                <h2>动作测试</h2>
+              </div>
+              <span class="summary-pill">Codex 固定 9 行</span>
+            </div>
+            <div id="actionGrid" class="action-grid"></div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-title-row">
+              <div>
+                <span class="eyebrow">运行</span>
+                <h2>路径信息</h2>
+              </div>
+            </div>
+            <dl class="paths single">
+              <div>
+                <dt>settings</dt>
+                <dd id="settingsPath"></dd>
+              </div>
+            </dl>
+          </section>
+        </section>
+      </div>
     </main>
     <script src="./settings.js"></script>
   </body>

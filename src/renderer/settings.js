@@ -1,5 +1,7 @@
 const apiInfo = document.getElementById("apiInfo");
 const refreshBtn = document.getElementById("refreshBtn");
+const storageTabs = document.getElementById("storageTabs");
+const chooseCustomBtn = document.getElementById("chooseCustomBtn");
 const petCount = document.getElementById("petCount");
 const petList = document.getElementById("petList");
 const actionGrid = document.getElementById("actionGrid");
@@ -7,8 +9,10 @@ const hookSummary = document.getElementById("hookSummary");
 const hookList = document.getElementById("hookList");
 const zoomInfo = document.getElementById("zoomInfo");
 const bubbleInfo = document.getElementById("bubbleInfo");
+const storageName = document.getElementById("storageName");
 const petsRoot = document.getElementById("petsRoot");
-const petRunsRoot = document.getElementById("petRunsRoot");
+const codexPetsRoot = document.getElementById("codexPetsRoot");
+const customPetsRoot = document.getElementById("customPetsRoot");
 const settingsPath = document.getElementById("settingsPath");
 
 let activePetKey = "";
@@ -16,6 +20,8 @@ let zoom = 1;
 let bubbleScale = 1;
 let installingHookAgent = "";
 let activeHookAgent = "codex";
+let currentStorage = "codex";
+let currentCustomPetsRoot = "";
 
 function createTextElement(tag, className, text) {
   const element = document.createElement(tag);
@@ -68,13 +74,11 @@ function renderHookStatus(hooks) {
 
     const reason = hook.reason || (hook.state === "ok" ? "已接入" : "未接入");
     body.appendChild(createTextElement("div", "hook-reason", reason));
-
-    const meta = createTextElement(
+    body.appendChild(createTextElement(
       "div",
       "hook-meta",
       `${hook.configuredCount || 0}/${hook.totalEvents || 0} events · ${hook.settingsPath || ""}`
-    );
-    body.appendChild(meta);
+    ));
 
     if (Array.isArray(hook.missing) && hook.missing.length > 0) {
       body.appendChild(createTextElement("div", "hook-missing", `缺失：${hook.missing.join(", ")}`));
@@ -164,17 +168,29 @@ async function installHook(hook) {
 }
 
 function renderPets(pets) {
-  petCount.textContent = String(pets.length);
+  const list = Array.isArray(pets) ? pets : [];
+  petCount.textContent = String(list.length);
   petList.innerHTML = "";
 
-  for (const pet of pets) {
+  if (list.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "empty-note";
+    empty.textContent = "当前目录还没有可用宠物。请从上方渠道下载宠物包，解压后放入当前目录，或切换到自定义宠物文件夹。";
+    petList.appendChild(empty);
+    return;
+  }
+
+  for (const pet of list) {
+    const sourceLabel = pet.sourceLabel || (pet.source === "builtin" ? "内置" : "目录");
     const item = document.createElement("article");
     item.className = `pet-item${pet.key === activePetKey ? " active" : ""}`;
     item.innerHTML = `
       <div>
-        <div class="pet-name">${pet.displayName || pet.id}</div>
+        <div class="pet-title">
+          <div class="pet-name">${pet.displayName || pet.id}</div>
+          <span class="pet-source">${sourceLabel}</span>
+        </div>
         <div class="pet-meta">${pet.key}</div>
-        <div class="pet-meta">${pet.spritesheetPath}</div>
       </div>
       <button type="button" class="${pet.key === activePetKey ? "primary" : ""}">
         ${pet.key === activePetKey ? "当前" : "使用"}
@@ -183,12 +199,34 @@ function renderPets(pets) {
     item.querySelector("button").addEventListener("click", async () => {
       const result = await window.desktopPet.selectPet({ key: pet.key });
       if (result.ok) {
-        activePetKey = result.activePet.key;
+        activePetKey = result.activePet?.key || "";
         renderPets(result.pets);
       }
     });
     petList.appendChild(item);
   }
+}
+
+function renderStorage(storage) {
+  if (!storage) return;
+  currentStorage = storage.petStorage || "codex";
+  currentCustomPetsRoot = storage.customPetsRoot || "";
+  storageName.textContent = currentStorage === "custom" ? "自定义文件夹" : ".codex 宠物";
+  petsRoot.textContent = storage.petsRoot || "";
+  codexPetsRoot.textContent = storage.codexPetsRoot || "";
+  customPetsRoot.textContent = storage.customPetsRoot || "未设置";
+
+  storageTabs.querySelectorAll("[data-storage]").forEach((button) => {
+    const active = button.dataset.storage === currentStorage;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", active ? "true" : "false");
+  });
+}
+
+async function applyPetResult(result) {
+  if (result.storage) renderStorage(result.storage);
+  if (result.activePet) activePetKey = result.activePet.key || "";
+  if (Array.isArray(result.pets)) renderPets(result.pets);
 }
 
 async function loadSettings() {
@@ -200,9 +238,13 @@ async function loadSettings() {
   zoomInfo.textContent = `${Math.round(zoom * 100)}%`;
   bubbleInfo.textContent = `${Math.round(bubbleScale * 100)}%`;
   apiInfo.textContent = initial.config?.apiBaseUrl || "";
-  petsRoot.textContent = initial.config?.petsRoot || "";
-  petRunsRoot.textContent = initial.config?.petRunsRoot || "";
   settingsPath.textContent = initial.config?.settingsPath || "";
+  renderStorage({
+    petStorage: initial.config?.petStorage,
+    petsRoot: initial.config?.petsRoot,
+    codexPetsRoot: initial.config?.codexPetsRoot,
+    customPetsRoot: initial.config?.customPetsRoot
+  });
   renderPets(initial.pets || []);
   renderActions(initial.actions || []);
   renderHookStatus(initial.config?.hookStatus || []);
@@ -211,7 +253,7 @@ async function loadSettings() {
 
 window.desktopPet.onPetChange((pet) => {
   activePetKey = pet?.key || "";
-  window.desktopPet.listPets().then((result) => renderPets(result.pets || []));
+  window.desktopPet.listPets().then((result) => applyPetResult(result));
 });
 window.desktopPet.onStateChange(() => {});
 window.desktopPet.onZoomChange((payload) => {
@@ -222,7 +264,38 @@ window.desktopPet.onBubbleScaleChange((payload) => {
   bubbleScale = Number(payload?.bubbleScale) || bubbleScale;
   bubbleInfo.textContent = `${Math.round(bubbleScale * 100)}%`;
 });
+
 refreshBtn.addEventListener("click", loadSettings);
+
+storageTabs.querySelectorAll("[data-storage]").forEach((button) => {
+  button.addEventListener("click", async () => {
+    if (button.dataset.storage === "custom" && !currentCustomPetsRoot) {
+      const chosen = await window.desktopPet.chooseCustomPetStorage();
+      if (chosen.ok) applyPetResult(chosen);
+      return;
+    }
+
+    const result = await window.desktopPet.selectPetStorage({ storage: button.dataset.storage });
+    if (!result.ok) {
+      window.alert(result.error || "切换宠物目录失败");
+      return;
+    }
+    applyPetResult(result);
+  });
+});
+
+chooseCustomBtn.addEventListener("click", async () => {
+  const result = await window.desktopPet.chooseCustomPetStorage();
+  if (result.ok) applyPetResult(result);
+});
+
+document.querySelectorAll("[data-open-folder]").forEach((button) => {
+  button.addEventListener("click", async () => {
+    const result = await window.desktopPet.openPetFolder({ kind: button.dataset.openFolder });
+    if (!result.ok) window.alert(result.error || "打开文件夹失败");
+  });
+});
+
 document.querySelectorAll("[data-zoom]").forEach((button) => {
   button.addEventListener("click", () => {
     const nextZoom = Number(button.dataset.zoom);
@@ -230,6 +303,7 @@ document.querySelectorAll("[data-zoom]").forEach((button) => {
     window.desktopPet.resizeWindow({ zoom: nextZoom });
   });
 });
+
 document.querySelectorAll("[data-bubble-scale]").forEach((button) => {
   button.addEventListener("click", () => {
     const nextScale = Number(button.dataset.bubbleScale);
@@ -237,4 +311,5 @@ document.querySelectorAll("[data-bubble-scale]").forEach((button) => {
     window.desktopPet.resizeBubble({ bubbleScale: nextScale });
   });
 });
+
 loadSettings();
