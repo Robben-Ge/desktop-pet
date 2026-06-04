@@ -53,5 +53,9 @@ contextBridge.exposeInMainWorld("desktopPet", {
     const listener = (_event, payload) => callback(payload);
     ipcRenderer.on("bubble:set-message", listener);
     return () => ipcRenderer.removeListener("bubble:set-message", listener);
-  }
+  },
+  getReminders: () => ipcRenderer.invoke("pet:get-reminders"),
+  updateReminderConfig: (payload) => ipcRenderer.invoke("pet:update-reminder-config", payload),
+  triggerReminder: (payload) => ipcRenderer.invoke("pet:trigger-reminder", payload),
+  resetReminders: (payload) => ipcRenderer.invoke("pet:reset-reminders", payload)
 });

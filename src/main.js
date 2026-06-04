@@ -12,6 +12,7 @@ const {
   toPetPayload
 } = require("./pet-library");
 const { SessionManager } = require("./session-manager");
+const { ReminderManager } = require("./reminder-manager");
 
 const API_HOST = "127.0.0.1";
 const API_PORT = Number(process.env.PET_PORT || 17861);
@@ -70,6 +71,7 @@ let updateDownloaded = false;
 let updateInstallStarted = false;
 let updatePromptVisible = false;
 let pendingUpdateInfo = null;
+let reminderManager = null;
 let updateStatus = {
   status: "idle",
   message: "尚未检查更新",
@@ -793,7 +795,8 @@ function buildInitialPayload() {
       baseWindowHeight: BASE_WINDOW_HEIGHT,
       appVersion: app.getVersion(),
       releaseUrl: RELEASES_URL,
-      updateStatus: getUpdateStatus()
+      updateStatus: getUpdateStatus(),
+      reminderStatus: reminderManager ? reminderManager.getStatus() : null
     }
   };
 }
@@ -1248,6 +1251,58 @@ async function handleApiRequest(req, res) {
     return;
   }
 
+  // ---- Reminder API ----
+
+  if (url.pathname === "/reminders" && req.method === "GET") {
+    sendJson(res, 200, { ok: true, reminders: reminderManager ? reminderManager.getStatus() : null });
+    return;
+  }
+
+  if (url.pathname === "/reminders/config" && req.method === "POST") {
+    try {
+      const body = await parseJsonBody(req);
+      if (!reminderManager) {
+        sendJson(res, 503, { ok: false, error: "Reminder manager not initialized" });
+        return;
+      }
+      const result = reminderManager.updateConfig(body);
+      sendJson(res, result.ok ? 200 : 400, result);
+    } catch (error) {
+      sendJson(res, 400, { ok: false, error: error.message });
+    }
+    return;
+  }
+
+  if (url.pathname === "/reminders/trigger" && req.method === "POST") {
+    try {
+      const body = await parseJsonBody(req);
+      if (!reminderManager) {
+        sendJson(res, 503, { ok: false, error: "Reminder manager not initialized" });
+        return;
+      }
+      const result = reminderManager.triggerNow(body.typeId || body.id);
+      sendJson(res, result.ok ? 200 : 400, result);
+    } catch (error) {
+      sendJson(res, 400, { ok: false, error: error.message });
+    }
+    return;
+  }
+
+  if (url.pathname === "/reminders/reset" && req.method === "POST") {
+    try {
+      const body = await parseJsonBody(req);
+      if (!reminderManager) {
+        sendJson(res, 503, { ok: false, error: "Reminder manager not initialized" });
+        return;
+      }
+      const result = reminderManager.reset(body.typeId || body.id);
+      sendJson(res, result.ok ? 200 : 400, result);
+    } catch (error) {
+      sendJson(res, 400, { ok: false, error: error.message });
+    }
+    return;
+  }
+
   sendJson(res, 404, { ok: false, error: "Not found" });
 }
 
@@ -1263,11 +1318,8 @@ function createApiServer() {
   });
 }
 
-function createTray() {
-  const icon = createAppIcon().resize({ width: 16, height: 16 });
-  tray = new Tray(icon);
-  tray.setToolTip("Desktop Pet Agent");
-  tray.setContextMenu(Menu.buildFromTemplate([
+function buildTrayMenu() {
+  return Menu.buildFromTemplate([
     {
       label: "Show / Hide",
       click: () => {
@@ -1278,6 +1330,19 @@ function createTray() {
     {
       label: "Settings",
       click: () => createSettingsWindow()
+    },
+    {
+      label: "免打扰模式",
+      type: "checkbox",
+      checked: reminderManager ? reminderManager.getConfig().quietMode : false,
+      click: (menuItem) => {
+        if (!reminderManager) return;
+        reminderManager.updateConfig({ quietMode: menuItem.checked });
+        saveSettings();
+      }
+    },
+    {
+      type: "separator"
     },
     {
       label: "Check for Updates",
@@ -1302,7 +1367,19 @@ function createTray() {
       label: "Quit",
       click: () => app.quit()
     }
-  ]));
+  ]);
+}
+
+function rebuildTrayMenu() {
+  if (!tray || tray.isDestroyed()) return;
+  tray.setContextMenu(buildTrayMenu());
+}
+
+function createTray() {
+  const icon = createAppIcon().resize({ width: 16, height: 16 });
+  tray = new Tray(icon);
+  tray.setToolTip("Desktop Pet Agent");
+  tray.setContextMenu(buildTrayMenu());
 }
 
 function configureMacMenuBarMode() {
@@ -1322,6 +1399,24 @@ app.whenReady().then(() => {
   createBubbleWindow();
   createTray();
   createApiServer();
+
+  reminderManager = new ReminderManager({
+    reminders: settings.reminders,
+    save: (config) => {
+      settings.reminders = config;
+      saveSettings();
+      rebuildTrayMenu();
+    },
+    onTrigger: ({ typeId, label, state, message, durationSeconds }) => {
+      broadcastState({ state, message });
+      if (durationSeconds > 0) {
+        setTimeout(() => {
+          broadcastState({ state: "idle", message: "" });
+        }, durationSeconds * 1000);
+      }
+    }
+  });
+  reminderManager.start();
 
   ipcMain.handle("pet:get-initial-state", () => buildInitialPayload());
   ipcMain.handle("pet:list-pets", () => {
@@ -1459,6 +1554,22 @@ app.whenReady().then(() => {
   });
   ipcMain.on("pet:open-settings", () => createSettingsWindow());
 
+  ipcMain.handle("pet:get-reminders", () => {
+    return { ok: true, reminders: reminderManager ? reminderManager.getStatus() : null };
+  });
+  ipcMain.handle("pet:update-reminder-config", (_event, payload) => {
+    if (!reminderManager) return { ok: false, error: "Reminder engine not ready" };
+    return reminderManager.updateConfig(payload);
+  });
+  ipcMain.handle("pet:trigger-reminder", (_event, payload) => {
+    if (!reminderManager) return { ok: false, error: "Reminder engine not ready" };
+    return reminderManager.triggerNow(payload?.typeId || payload?.id);
+  });
+  ipcMain.handle("pet:reset-reminders", (_event, payload) => {
+    if (!reminderManager) return { ok: false, error: "Reminder engine not ready" };
+    return reminderManager.reset(payload?.typeId || payload?.id);
+  });
+
   setTimeout(() => {
     checkForUpdates(false).catch((error) => {
       console.warn(`Silent update check failed: ${error.message}`);
@@ -1471,5 +1582,6 @@ app.on("window-all-closed", (event) => {
 });
 
 app.on("before-quit", () => {
+  if (reminderManager) reminderManager.stop();
   if (server) server.close();
 });

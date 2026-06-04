@@ -289,8 +289,10 @@ async function loadSettings() {
   renderPets(initial.pets || []);
   renderActions(initial.actions || []);
   renderHookStatus(initial.config?.hookStatus || []);
+  renderReminders(initial.config?.reminderStatus);
   window.desktopPet.getHookStatus().then((result) => renderHookStatus(result.hooks || []));
   window.desktopPet.getUpdateStatus().then((result) => renderUpdateStatus(result.update));
+  window.desktopPet.getReminders().then((result) => { if (result.ok) renderReminders(result.reminders); });
 }
 
 window.desktopPet.onPetChange((pet) => {
@@ -373,6 +375,375 @@ document.querySelectorAll("[data-bubble-scale]").forEach((button) => {
     if (!Number.isFinite(nextScale)) return;
     window.desktopPet.resizeBubble({ bubbleScale: nextScale });
   });
+});
+
+// ---- Reminder Settings ----
+
+const reminderIcons = {
+  "drink-water": "💧",
+  "stretch": "🏃",
+  "rest-eyes": "👁",
+  "take-break": "☕",
+  "clock-out": "🎉"
+};
+
+const reminderMasterToggle = document.getElementById("reminderMasterToggle");
+const reminderQuietToggle = document.getElementById("reminderQuietToggle");
+const reminderWorkStart = document.getElementById("reminderWorkStart");
+const reminderWorkEnd = document.getElementById("reminderWorkEnd");
+const reminderTypeList = document.getElementById("reminderTypeList");
+const reminderSummary = document.getElementById("reminderSummary");
+
+let currentReminderConfig = null;
+
+function renderReminders(reminders) {
+  if (!reminders) return;
+  currentReminderConfig = reminders;
+
+  reminderMasterToggle.checked = reminders.enabled;
+  reminderQuietToggle.checked = reminders.quietMode;
+  reminderWorkStart.value = reminders.workHours?.start || "09:00";
+  reminderWorkEnd.value = reminders.workHours?.end || "18:00";
+
+  const enabledCount = (reminders.types || []).filter((t) => t.enabled).length;
+  reminderSummary.textContent = reminders.enabled
+    ? `已启用 · ${enabledCount}/${reminders.types.length} 项`
+    : "已停用";
+
+  renderReminderTypes(reminders.types || []);
+}
+
+const REMINDER_ANIMATIONS = [
+  { value: "waving", label: "挥手" },
+  { value: "jumping", label: "跳跃" },
+  { value: "running", label: "工作" },
+  { value: "waiting", label: "等待" },
+  { value: "review", label: "思考" },
+  { value: "failed", label: "趴下" },
+  { value: "idle", label: "待机" }
+];
+
+function renderReminderTypes(types) {
+  reminderTypeList.innerHTML = "";
+
+  for (const type of types) {
+    const card = document.createElement("div");
+    card.className = `reminder-type-card${type.enabled ? "" : " disabled"}`;
+
+    // ---- Row 1: name + mode info ----
+    const row1 = document.createElement("div");
+    row1.className = "reminder-top-row";
+
+    const iconSpan = document.createElement("span");
+    iconSpan.className = "reminder-icon";
+    iconSpan.textContent = reminderIcons[type.id] || "🔔";
+
+    const infoDiv = document.createElement("div");
+    infoDiv.className = "reminder-info";
+    infoDiv.innerHTML = `
+      <div class="reminder-name">${type.label}</div>
+      <div class="reminder-meta">${type.mode === "scheduled" ? `定点 ${type.scheduledTime}` : `间隔 ${type.intervalMinutes} 分钟`}</div>
+    `;
+
+    row1.appendChild(iconSpan);
+    row1.appendChild(infoDiv);
+
+    // Delete button for custom types
+    const isBuiltin = ["drink-water", "stretch", "rest-eyes", "take-break", "clock-out"].includes(type.id);
+    if (!isBuiltin) {
+      const delBtn = document.createElement("button");
+      delBtn.type = "button";
+      delBtn.className = "reminder-delete";
+      delBtn.textContent = "×";
+      delBtn.title = "删除此提醒";
+      delBtn.addEventListener("click", () => deleteReminderType(type.id));
+      row1.appendChild(delBtn);
+    }
+
+    card.appendChild(row1);
+
+    // ---- Row 2: controls (toggle, interval, animation, duration, elapsed) ----
+    const controlsDiv = document.createElement("div");
+    controlsDiv.className = "reminder-controls";
+
+    // Enable toggle
+    const toggle = document.createElement("input");
+    toggle.type = "checkbox";
+    toggle.checked = type.enabled;
+    toggle.addEventListener("change", () => {
+      saveReminderType(type.id, { enabled: toggle.checked });
+    });
+    controlsDiv.appendChild(toggle);
+
+    // Mode toggle
+    const modeToggle = document.createElement("button");
+    modeToggle.type = "button";
+    modeToggle.className = "reminder-mode-toggle";
+    modeToggle.textContent = type.mode === "scheduled" ? "定点" : "间隔";
+    modeToggle.addEventListener("click", () => {
+      const newMode = type.mode === "scheduled" ? "interval" : "scheduled";
+      const patch = { mode: newMode };
+      if (newMode === "interval" && !type.intervalMinutes) patch.intervalMinutes = 60;
+      if (newMode === "scheduled" && !type.scheduledTime) patch.scheduledTime = "18:00";
+      saveReminderType(type.id, patch);
+    });
+    controlsDiv.appendChild(modeToggle);
+
+    // Interval number or time picker
+    if (type.mode === "interval") {
+      const numInput = document.createElement("input");
+      numInput.type = "number";
+      numInput.min = 1;
+      numInput.max = 999;
+      numInput.step = 1;
+      numInput.value = type.intervalMinutes || 60;
+      numInput.style.width = "48px";
+      numInput.title = "分钟";
+      numInput.addEventListener("change", () => {
+        const val = Math.max(1, Math.min(999, parseInt(numInput.value, 10) || 1));
+        numInput.value = val;
+        saveReminderType(type.id, { intervalMinutes: val });
+      });
+      controlsDiv.appendChild(numInput);
+
+      const unit = document.createElement("span");
+      unit.textContent = "分";
+      unit.className = "reminder-unit";
+      controlsDiv.appendChild(unit);
+    } else {
+      const timeInput = document.createElement("input");
+      timeInput.type = "time";
+      timeInput.value = type.scheduledTime || "18:00";
+      timeInput.style.width = "68px";
+      timeInput.addEventListener("change", () => {
+        saveReminderType(type.id, { scheduledTime: timeInput.value });
+      });
+      controlsDiv.appendChild(timeInput);
+    }
+
+    // Animation picker
+    const animSpan = document.createElement("span");
+    animSpan.textContent = "动画";
+    animSpan.className = "reminder-unit";
+    controlsDiv.appendChild(animSpan);
+
+    const animSelect = document.createElement("select");
+    animSelect.style.width = "64px";
+    for (const a of REMINDER_ANIMATIONS) {
+      const opt = document.createElement("option");
+      opt.value = a.value;
+      opt.textContent = a.label;
+      if (a.value === (type.animationState || "waving")) opt.selected = true;
+      animSelect.appendChild(opt);
+    }
+    animSelect.addEventListener("change", () => {
+      saveReminderType(type.id, { animationState: animSelect.value });
+    });
+    controlsDiv.appendChild(animSelect);
+
+    // Duration
+    const durInput = document.createElement("input");
+    durInput.type = "number";
+    durInput.min = 1;
+    durInput.max = 60;
+    durInput.step = 1;
+    durInput.value = type.durationSeconds || 5;
+    durInput.style.width = "46px";
+    durInput.title = "动画持续秒数";
+    durInput.addEventListener("change", () => {
+      const val = Math.max(1, Math.min(60, parseInt(durInput.value, 10) || 5));
+      durInput.value = val;
+      saveReminderType(type.id, { durationSeconds: val });
+    });
+    controlsDiv.appendChild(durInput);
+
+    const durUnit = document.createElement("span");
+    durUnit.textContent = "秒";
+    durUnit.className = "reminder-unit";
+    controlsDiv.appendChild(durUnit);
+
+    // Elapsed
+    const elapsed = document.createElement("span");
+    elapsed.className = "reminder-elapsed";
+    elapsed.title = "距离上次提醒已过去的时间";
+    if (type.mode === "interval" && type.elapsedSeconds !== undefined) {
+      const m = Math.floor(type.elapsedSeconds / 60);
+      const s = type.elapsedSeconds % 60;
+      elapsed.textContent = m > 0 ? `${m}m${s}s` : `${s}s`;
+    }
+    controlsDiv.appendChild(elapsed);
+
+    card.appendChild(controlsDiv);
+
+    // ---- Row 3: message input ----
+    const msgRow = document.createElement("div");
+    msgRow.className = "reminder-msg-row";
+
+    const input = document.createElement("input");
+    input.type = "text";
+    input.className = "reminder-msg-input";
+    input.value = type.message || "";
+    input.placeholder = "点击输入自定义提醒文字...";
+    input.addEventListener("blur", () => {
+      saveReminderMessage(type.id, input.value);
+    });
+    msgRow.appendChild(input);
+
+    const hint = document.createElement("span");
+    hint.className = "reminder-msg-hint";
+    hint.textContent = "{minutes} = 间隔分钟数";
+    msgRow.appendChild(hint);
+
+    card.appendChild(msgRow);
+    reminderTypeList.appendChild(card);
+  }
+
+  // ---- Add custom reminder button ----
+  const addBtn = document.createElement("button");
+  addBtn.type = "button";
+  addBtn.className = "reminder-add-btn";
+  addBtn.textContent = "+ 添加自定义提醒";
+  addBtn.addEventListener("click", addCustomReminder);
+  reminderTypeList.appendChild(addBtn);
+}
+
+const customModal = document.getElementById("customModal");
+const customModalText = document.getElementById("customModalText");
+const customModalInput = document.getElementById("customModalInput");
+const customModalOk = document.getElementById("customModalOk");
+const customModalCancel = document.getElementById("customModalCancel");
+
+function showModal({ text, input = false, defaultValue = "" }) {
+  return new Promise((resolve) => {
+    customModalText.textContent = text;
+    customModalInput.style.display = input ? "block" : "none";
+    customModalInput.value = defaultValue;
+    customModal.style.display = "grid";
+    if (input) customModalInput.focus();
+
+    const onOk = () => {
+      cleanup();
+      resolve(input ? customModalInput.value.trim() : true);
+    };
+    const onCancel = () => {
+      cleanup();
+      resolve(input ? null : false);
+    };
+    const onKey = (e) => {
+      if (e.key === "Enter") onOk();
+      if (e.key === "Escape") onCancel();
+    };
+
+    const cleanup = () => {
+      customModal.style.display = "none";
+      customModalOk.removeEventListener("click", onOk);
+      customModalCancel.removeEventListener("click", onCancel);
+      document.removeEventListener("keydown", onKey);
+    };
+
+    customModalOk.addEventListener("click", onOk);
+    customModalCancel.addEventListener("click", onCancel);
+    document.addEventListener("keydown", onKey);
+  });
+}
+
+async function addCustomReminder() {
+  const label = await showModal({ text: "提醒名称（如：吃水果、开会）", input: true });
+  if (!label) return;
+
+  const id = "custom-" + Date.now();
+  const result = await window.desktopPet.updateReminderConfig({
+    types: [{
+      id,
+      label,
+      mode: "interval",
+      enabled: true,
+      intervalMinutes: 30,
+      message: `${label} 时间到！`,
+      animationState: "waving",
+      durationSeconds: 5
+    }]
+  });
+
+  if (result.ok) {
+    const next = await window.desktopPet.getReminders();
+    if (next.ok) renderReminders(next.reminders);
+  }
+}
+
+async function deleteReminderType(typeId) {
+  const confirmed = await showModal({ text: "确定删除这个提醒吗？" });
+  if (!confirmed) return;
+
+  const result = await window.desktopPet.updateReminderConfig({
+    types: [{ id: typeId, __delete: true }]
+  });
+
+  if (result.ok) {
+    const next = await window.desktopPet.getReminders();
+    if (next.ok) renderReminders(next.reminders);
+  }
+}
+
+async function saveReminderMessage(typeId, message) {
+  if (!currentReminderConfig) return;
+  try {
+    await window.desktopPet.updateReminderConfig({
+      types: [{ id: typeId, message: String(message).slice(0, 120) }]
+    });
+    // Update local cache only, no full re-render to avoid losing input
+    const idx = currentReminderConfig.types.findIndex((t) => t.id === typeId);
+    if (idx !== -1) {
+      currentReminderConfig.types[idx].message = String(message).slice(0, 120);
+    }
+  } catch (e) {
+    console.warn("Failed to save reminder message:", e);
+  }
+}
+
+async function saveReminderType(typeId, patch) {
+  if (!currentReminderConfig) return;
+  try {
+    const result = await window.desktopPet.updateReminderConfig({
+      types: [{ id: typeId, ...patch }]
+    });
+    if (result.ok) {
+      const next = await window.desktopPet.getReminders();
+      if (next.ok) renderReminders(next.reminders);
+    }
+  } catch (e) {
+    console.warn("Failed to save reminder config:", e);
+  }
+}
+
+reminderMasterToggle.addEventListener("change", async () => {
+  if (!currentReminderConfig) return;
+  await window.desktopPet.updateReminderConfig({ enabled: reminderMasterToggle.checked });
+  const result = await window.desktopPet.getReminders();
+  if (result.ok) renderReminders(result.reminders);
+});
+
+reminderQuietToggle.addEventListener("change", async () => {
+  if (!currentReminderConfig) return;
+  await window.desktopPet.updateReminderConfig({ quietMode: reminderQuietToggle.checked });
+  const result = await window.desktopPet.getReminders();
+  if (result.ok) renderReminders(result.reminders);
+});
+
+async function saveWorkHours() {
+  if (!currentReminderConfig) return;
+  await window.desktopPet.updateReminderConfig({
+    workHours: { start: reminderWorkStart.value, end: reminderWorkEnd.value }
+  });
+}
+
+reminderWorkStart.addEventListener("change", saveWorkHours);
+reminderWorkEnd.addEventListener("change", saveWorkHours);
+
+const reminderCollapseBtn = document.getElementById("reminderCollapseBtn");
+const reminderPanel = document.querySelector(".reminder-panel");
+reminderCollapseBtn.addEventListener("click", () => {
+  reminderPanel.classList.toggle("collapsed");
 });
 
 loadSettings();

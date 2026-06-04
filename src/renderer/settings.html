@@ -189,9 +189,54 @@
               </div>
             </dl>
           </section>
+
+          <section class="panel reminder-panel">
+            <div class="panel-title-row">
+              <div>
+                <span class="eyebrow">健康</span>
+                <h2>⏰ 提醒</h2>
+              </div>
+              <div style="display:flex;align-items:center;gap:10px;">
+                <span id="reminderSummary" class="summary-pill">已启用</span>
+                <button type="button" id="reminderCollapseBtn" class="reminder-collapse-btn" title="折叠/展开">▼</button>
+              </div>
+            </div>
+
+            <div class="reminder-global">
+              <label class="toggle-row">
+                <span class="toggle-label">总开关</span>
+                <input type="checkbox" id="reminderMasterToggle" />
+              </label>
+              <label class="toggle-row">
+                <span class="toggle-label">免打扰模式</span>
+                <input type="checkbox" id="reminderQuietToggle" />
+              </label>
+              <div class="reminder-workhours">
+                <span class="toggle-label">工作时段</span>
+                <div class="time-range">
+                  <input type="time" id="reminderWorkStart" value="09:00" />
+                  <span>—</span>
+                  <input type="time" id="reminderWorkEnd" value="18:00" />
+                </div>
+              </div>
+            </div>
+
+            <div id="reminderTypeList" class="reminder-type-list"></div>
+          </section>
         </section>
       </div>
     </main>
+    <!-- Lightweight modal for prompt/confirm -->
+    <div id="customModal" class="custom-modal" style="display:none;">
+      <div class="custom-modal-box">
+        <p id="customModalText"></p>
+        <input type="text" id="customModalInput" style="display:none;" />
+        <div class="custom-modal-actions">
+          <button id="customModalCancel" type="button">取消</button>
+          <button id="customModalOk" type="button" class="primary">确定</button>
+        </div>
+      </div>
+    </div>
     <script src="./settings.js"></script>
   </body>
 </html>
