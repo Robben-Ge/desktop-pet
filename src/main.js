@@ -13,6 +13,7 @@ const API_PORT = Number(process.env.PET_PORT || 17861);
 const CODEX_HOME = process.env.CODEX_HOME || path.join(os.homedir(), ".codex");
 const PETS_DIR = path.join(CODEX_HOME, "pets");
 const PET_RUNS_DIR = path.join(CODEX_HOME, "pet-runs");
+const LOGO_PATH = path.join(__dirname, "assets", "logo.svg");
 const BASE_WINDOW_WIDTH = 240;
 const BASE_WINDOW_HEIGHT = 286;
 const MIN_ZOOM = 0.65;
@@ -112,6 +113,20 @@ function readJson(filePath) {
   } catch {
     return null;
   }
+}
+
+function createAppIcon() {
+  try {
+    const svg = fs.readFileSync(LOGO_PATH, "utf8");
+    const image = nativeImage.createFromDataURL(`data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`);
+    if (!image.isEmpty()) return image;
+  } catch (error) {
+    console.warn(`Failed to load app logo: ${error.message}`);
+  }
+
+  return nativeImage.createFromDataURL(
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAMAAAAoLQ9TAAAAGFBMVEUAAAAYIi9i5v9y8qaZfP/90WYfKz2xyNj28m6BAAAAB3RSTlMA///f39+fn6uU/gAAAEFJREFUeNqVj0kOwCAIBQO//2XnplkYQYJGk0BHyDKJg1xmEAjJQWYNZUdGgTYosAkfiBPwYQnKN3qHf6Snw6gudTW2DdqgAhoBA3kwAAAAAElFTkSuQmCC"
+  );
 }
 
 function getSettingsPath() {
@@ -224,6 +239,7 @@ function createWindow() {
     alwaysOnTop: true,
     skipTaskbar: true,
     hasShadow: false,
+    icon: createAppIcon(),
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
@@ -253,6 +269,7 @@ function createBubbleWindow() {
     skipTaskbar: true,
     hasShadow: false,
     focusable: false,
+    icon: createAppIcon(),
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
@@ -288,8 +305,9 @@ function createSettingsWindow() {
     height: 680,
     minWidth: 760,
     minHeight: 560,
-    title: "Desktop Pet Settings",
+    title: "Desktop Pet Agent Settings",
     show: false,
+    icon: createAppIcon(),
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
@@ -1030,9 +1048,7 @@ function createApiServer() {
 }
 
 function createTray() {
-  const icon = nativeImage.createFromDataURL(
-    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAMAAAAoLQ9TAAAAGFBMVEUAAAAYIi9i5v9y8qaZfP/90WYfKz2xyNj28m6BAAAAB3RSTlMA///f39+fn6uU/gAAAEFJREFUeNqVj0kOwCAIBQO//2XnplkYQYJGk0BHyDKJg1xmEAjJQWYNZUdGgTYosAkfiBPwYQnKN3qHf6Snw6gudTW2DdqgAhoBA3kwAAAAAElFTkSuQmCC"
-  );
+  const icon = createAppIcon().resize({ width: 16, height: 16 });
   tray = new Tray(icon);
   tray.setToolTip("Desktop Pet Agent");
   tray.setContextMenu(Menu.buildFromTemplate([
@@ -1070,6 +1086,8 @@ function createTray() {
 }
 
 app.whenReady().then(() => {
+  app.setName("Desktop Pet Agent");
+  if (process.platform === "win32") app.setAppUserModelId("com.desktop-pet-agent.app");
   loadSettings();
   discoverPets();
   createWindow();

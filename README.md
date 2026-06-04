@@ -1,351 +1,573 @@
 # Desktop Pet Agent
 
-这是一个把 Codex 软件里的“设置 -> 外观 -> 宠物”runtime 单独拆出来的 MVP。
+<p align="center">
+  <img src="src/assets/logo.svg" width="128" height="128" alt="Desktop Pet Agent logo" />
+</p>
 
-它直接读取本机 Codex 宠物包：
+<p align="center">
+  A standalone desktop pet runtime for Codex-compatible pets and real agent hooks.
+</p>
+
+Desktop Pet Agent is a standalone Electron desktop pet runtime for agent status feedback.
+
+It can load Codex-compatible pet spritesheets, show a draggable always-on-top desktop pet, display an edge-aware message bubble, and receive real lifecycle hooks from Codex, Claude Code, and CodeBuddy.
+
+The project was built around two ideas:
+
+- Keep the pet runtime independent from any single agent product.
+- Normalize agent hook events into a small, stable visual state machine.
+
+## Integrated Agent Hooks
+
+These agent hook integrations are available today:
+
+| Agent | Status | Hook method | Events |
+| --- | --- | --- | --- |
+| Codex | Supported | `~/.codex/hooks.json` command hooks | 10 events |
+| Claude Code | Supported | `~/.claude/settings.json` exec command hooks | 6 events |
+| CodeBuddy | Supported | `~/.codebuddy/settings.json` command + HTTP hooks | 9 events |
+
+The project is intentionally built for more agents. PRs for Cursor, Gemini CLI, Qwen Code, OpenCode, Kimi, Copilot, Qoder, and other hook-capable coding agents are welcome.
+
+## Features
+
+- Standalone Electron desktop pet window.
+- Reads Codex-compatible pet packages from local `~/.codex/pets` and `~/.codex/pet-runs`.
+- Supports Codex fixed 9-row pet action atlas.
+- Draggable pet with left/right running animation while moving.
+- Idle-only resize handle, matching the original Codex desktop pet behavior.
+- Independent bubble window with configurable bubble scale.
+- Edge-aware bubble placement near screen boundaries.
+- Single active hook source selection: Codex, Claude Code, or CodeBuddy.
+- Hook status panel with install/repair buttons.
+- Local HTTP API for manual state updates and external integrations.
+- Real hook installer for Codex, Claude Code, and CodeBuddy.
+- Session aggregation and state priority handling.
+- Debounced `working -> thinking` transition to avoid bubble/animation flicker during tool chains.
+
+## Preview
+
+This repo does not ship a default pet asset. It uses pets already installed in:
 
 ```text
-C:\Users\J2441\.codex\pets
-C:\Users\J2441\.codex\pet-runs
+~/.codex/pets
+~/.codex/pet-runs
 ```
 
-`pets` 是正式安装包，`pet-runs` 是生成/调试包。两边都会显示；同名宠物用 `pets:<id>` 和 `pet-runs:<id>` 区分。
+On Windows those paths are usually:
 
-## 运行
+```text
+C:\Users\<you>\.codex\pets
+C:\Users\<you>\.codex\pet-runs
+```
 
-```powershell
+Each pet package should contain a `pet.json` and a Codex-compatible spritesheet such as `spritesheet.webp`.
+
+## Requirements
+
+- Node.js 18+
+- npm
+- Windows, macOS, or Linux with Electron support
+
+Real hook support depends on the agent being installed and able to load its hook configuration:
+
+| Agent | Config written by this project |
+| --- | --- |
+| Codex | `~/.codex/hooks.json` and `~/.codex/config.toml` |
+| Claude Code | `~/.claude/settings.json` |
+| CodeBuddy | `~/.codebuddy/settings.json` |
+
+## Quick Start
+
+Install dependencies:
+
+```bash
 npm install
+```
+
+Start the pet:
+
+```bash
 npm start
 ```
 
-默认 API：
+The local API listens on:
 
 ```text
 http://127.0.0.1:17861
 ```
 
-可用环境变量：
+Optional environment variables:
+
+```bash
+PET_PORT=17862 npm start
+PET_ID=xiao-jin npm start
+```
+
+On PowerShell:
 
 ```powershell
-$env:PET_PORT=17862
-$env:PET_ID="yinienie"
+$env:PET_PORT = "17862"
+$env:PET_ID = "xiao-jin"
 npm start
 ```
 
-## Codex 图集契约
+## Pet Format
 
-Codex 宠物是固定图集，不是任意动画文件：
+Desktop Pet Agent expects the same fixed atlas layout used by Codex pets:
 
 ```text
-1536x1872 WebP/PNG
+1536 x 1872 image
 8 columns x 9 rows
-cell: 192x208
-background: transparent
+192 x 208 per cell
+transparent background
+WebP or PNG
 ```
 
-固定 9 行状态：
+The 9 rows map to these states:
 
-```text
-idle           -> idle 待机
-running-right  -> 向右拖拽移动
-running-left   -> 向左拖拽移动
-waving         -> 挥手/提醒
-jumping        -> done 开心跳一下
-failed         -> sleeping 趴下睡觉
-waiting        -> waiting 等待输入
-running        -> working 敲代码中
-review         -> thinking 歪头思考
-```
+| State | Meaning |
+| --- | --- |
+| `idle` | idle / standing |
+| `running-right` | dragging or moving right |
+| `running-left` | dragging or moving left |
+| `waving` | reminder / notification |
+| `jumping` | done / happy jump |
+| `failed` | sleeping / failed |
+| `waiting` | waiting for input or permission |
+| `running` | working / coding |
+| `review` | thinking / reviewing |
 
-业务别名：
+State aliases are also accepted:
 
-```text
-start    -> waving
-success  -> jumping
-done     -> jumping
-sleeping -> failed
-working  -> running
-thinking -> review
-```
+| Alias | Normalized state |
+| --- | --- |
+| `start`, `remind` | `waving` |
+| `success`, `done` | `jumping` |
+| `sleeping` | `failed` |
+| `working` | `running` |
+| `thinking` | `review` |
 
-桌面交互：
-
-```text
-拖动宠物向右 -> running-right
-拖动宠物向左 -> running-left
-松开拖拽     -> 恢复拖拽前状态
-双击宠物     -> 打开设置页
-托盘 Settings -> 打开设置页
-idle 状态下鼠标移入宠物 -> 显示固定尺寸缩放手柄
-拖动右下角缩放手柄 -> 放大/缩小宠物
-非 idle 状态 -> 隐藏缩放手柄
-消息气泡 -> 独立透明窗口，自动避让屏幕边缘
-```
-
-## 设置页
-
-设置页可以：
-
-```text
-选择 C:\Users\J2441\.codex\pets 下的正式宠物包
-选择 C:\Users\J2441\.codex\pet-runs 下的生成调试包
-手动测试 Codex 固定 9 行动作
-通过尺寸按钮设置 75% / 100% / 125% / 150%
-通过气泡大小按钮单独设置 85% / 100% / 120% / 140%
-查看 API 地址、pets 目录、pet-runs 目录和本应用设置文件
-```
-
-选择的宠物、桌面窗口位置、宠物缩放比例和气泡大小会保存到 Electron 的 userData 设置文件。气泡大小独立于宠物缩放。
-
-气泡使用独立的 `BubbleWindow`，不再塞在宠物窗口内部。显示消息时会根据宠物窗口所在屏幕的 `workArea` 自动计算位置：优先显示在宠物上方，顶部空间不够时翻到下方，左右超出时 clamp 回屏幕内部。
-
-## API
-
-健康检查：
-
-```powershell
-Invoke-RestMethod http://127.0.0.1:17861/health
-```
-
-查看当前 agent 会话聚合：
-
-```powershell
-Invoke-RestMethod http://127.0.0.1:17861/sessions
-```
-
-列出宠物：
-
-```powershell
-Invoke-RestMethod http://127.0.0.1:17861/pets
-```
-
-选择宠物：
-
-```powershell
-Invoke-RestMethod `
-  -Method Post `
-  -Uri http://127.0.0.1:17861/pet/select `
-  -ContentType "application/json" `
-  -Body '{"key":"pets:yinienie"}'
-```
-
-切换状态：
-
-```powershell
-$body = '{"state":"working","message":"Codex 正在敲代码"}'
-Invoke-RestMethod `
-  -Method Post `
-  -Uri http://127.0.0.1:17861/state `
-  -ContentType "application/json; charset=utf-8" `
-  -Body ([System.Text.Encoding]::UTF8.GetBytes($body))
-```
-
-短暂提醒后自动回到待机：
-
-```powershell
-$body = '{"state":"done","message":"任务完成","durationMs":3000}'
-Invoke-RestMethod `
-  -Method Post `
-  -Uri http://127.0.0.1:17861/state `
-  -ContentType "application/json; charset=utf-8" `
-  -Body ([System.Text.Encoding]::UTF8.GetBytes($body))
-```
-
-切状态时顺带切宠物：
-
-```powershell
-$body = '{"petKey":"pet-runs:xiao-jin","state":"thinking","message":"正在思考"}'
-Invoke-RestMethod `
-  -Method Post `
-  -Uri http://127.0.0.1:17861/state `
-  -ContentType "application/json; charset=utf-8" `
-  -Body ([System.Text.Encoding]::UTF8.GetBytes($body))
-```
-
-Windows PowerShell 5.1 里不要直接把中文 JSON 字符串传给 `-Body`，它可能按系统默认编码发送，气泡会显示 `????`。上面的写法会明确发送 UTF-8 字节。
-
-## Agent event 协议
-
-这一层参考了两个方向：
-
-```text
-Clawd on Desk -> 多 agent hook 输入、会话状态聚合、优先级状态机
-OpenPets      -> 稳定的事件/反应协议，方便后续扩展 Claude、Codex、CodeBuddy
-```
-
-当前阶段先实现本地事件入口和状态机，不自动修改 `~/.claude`、`~/.codex` 或 CodeBuddy 配置。后续接真实 hook 时，只要让 hook 向 `/events` 发事件即可。
-
-通用事件格式：
+Example `pet.json`:
 
 ```json
 {
-  "source": "claude-code",
-  "event": "tool_start",
-  "sessionId": "optional-session-id",
-  "message": "Claude 正在执行工具"
+  "id": "my-pet",
+  "displayName": "My Pet",
+  "description": "A Codex-compatible desktop pet.",
+  "spritesheetPath": "spritesheet.webp"
 }
 ```
 
-支持的 `source`：
+## Settings
 
-```text
-claude-code
-codex
-codebuddy
-opencode
-openpets
-```
+Open settings by double-clicking the pet or from the tray menu.
 
-支持的通用事件：
+The settings page supports:
 
-```text
-session_start -> 挥手一下，并把会话放入 review
-task_start    -> review
-prompt        -> review
-tool_start    -> running；测试命令会映射为 waiting
-tool_end      -> review
-waiting       -> waiting
-notification  -> 挥手提醒
-done          -> jumping，然后回到其他活跃会话或 idle
-failed        -> failed，然后回到其他活跃会话或 idle
-session_end   -> 清理会话
-```
+- selecting a pet from `~/.codex/pets` or `~/.codex/pet-runs`;
+- manually testing the fixed 9 action states;
+- changing pet size;
+- changing bubble size independently from pet size;
+- checking hook status for Codex, Claude Code, and CodeBuddy;
+- installing or repairing hook configuration;
+- selecting exactly one active hook source to listen to.
 
-也支持 OpenPets 风格的 `reaction`：
+Only one agent is actively listened to at a time. This keeps the UI consistent with the single-pet, single-bubble model. You can still install hooks for multiple agents, but choose the current one in the settings panel.
 
-```text
-thinking -> review
-working/editing/running -> running
-testing/waiting -> waiting
-waving -> waving
-success/celebrating -> jumping
-error -> failed
-```
+## Real Hook Setup
 
-发送通用事件：
+Start the app before installing hooks:
 
-```powershell
-$body = '{"source":"claude-code","event":"tool_start","sessionId":"demo","message":"Claude 正在执行工具"}'
-Invoke-RestMethod `
-  -Method Post `
-  -Uri http://127.0.0.1:17861/events `
-  -ContentType "application/json; charset=utf-8" `
-  -Body ([System.Text.Encoding]::UTF8.GetBytes($body))
-```
-
-直接发送 Claude/CodeBuddy 兼容 hook payload：
-
-```powershell
-$body = '{"source":"codebuddy","hook_event_name":"Stop","session_id":"demo","message":"CodeBuddy 完成了"}'
-Invoke-RestMethod `
-  -Method Post `
-  -Uri http://127.0.0.1:17861/events `
-  -ContentType "application/json; charset=utf-8" `
-  -Body ([System.Text.Encoding]::UTF8.GetBytes($body))
-```
-
-直接发送 OpenPets reaction：
-
-```powershell
-$body = '{"source":"openpets","reaction":"thinking","sessionId":"demo"}'
-Invoke-RestMethod `
-  -Method Post `
-  -Uri http://127.0.0.1:17861/events `
-  -ContentType "application/json; charset=utf-8" `
-  -Body ([System.Text.Encoding]::UTF8.GetBytes($body))
-```
-
-清空当前 agent 会话：
-
-```powershell
-Invoke-RestMethod -Method Post http://127.0.0.1:17861/sessions/clear
-```
-
-## 真实 hook 接入
-
-当前已经包含真实 hook 桥接和安装器：
-
-```text
-src/hook-bridge.js      被 Claude/Codex/CodeBuddy hook 调用，读取 stdin JSON 后转发到 /events
-src/hook-installer.js   合并/移除各 agent 的 hook 配置
-```
-
-先启动桌宠：
-
-```powershell
+```bash
 npm start
 ```
 
-检查当前安装状态：
+Check hook status:
 
-```powershell
+```bash
 npm run hooks:doctor
 ```
 
-预览会写入哪些 hook，不改用户目录：
+Preview hook changes without writing user config:
 
-```powershell
+```bash
 npm run hooks:preview
 ```
 
-确认后安装真实 hook：
+Install all supported hooks:
 
-```powershell
+```bash
 npm run hooks:install
 ```
 
-只安装某一个 agent：
+Install one agent only:
 
-```powershell
-npm run hooks:install -- --agent claude-code
+```bash
 npm run hooks:install -- --agent codex
+npm run hooks:install -- --agent claude-code
 npm run hooks:install -- --agent codebuddy
 ```
 
-卸载本项目管理的 hook：
+Uninstall only hooks managed by this project:
 
-```powershell
+```bash
 npm run hooks:uninstall
 ```
 
-安装器写入位置：
+The installer only removes entries containing the project marker:
 
 ```text
-Claude Code -> C:\Users\<user>\.claude\settings.json
-Codex       -> C:\Users\<user>\.codex\hooks.json
-CodeBuddy   -> C:\Users\<user>\.codebuddy\settings.json
+--desktop-pet-agent-managed
 ```
 
-它只管理带有 `--desktop-pet-agent-managed` marker 的条目，会保留已有第三方 hook。每次实际写入前，如果原文件存在，会创建 `*.desktop-pet-agent-backup-<timestamp>` 备份。
+Before writing an existing config file, it creates a backup:
 
-Codex 使用官方 hooks 路径：每个 command hook 会收到 stdin JSON，常见字段包括 `session_id`、`transcript_path`、`cwd`、`hook_event_name`、`model`。本项目的 Codex hook 会把这些字段转发到 `/events`，并对 Codex stdout 返回 `{}`，避免 `Stop` / `SubagentStop` 这类要求 JSON stdout 的事件失败。
+```text
+*.desktop-pet-agent-backup-<timestamp>
+```
 
-单独调整气泡大小：
+### Codex
+
+Codex hooks are written to:
+
+```text
+~/.codex/hooks.json
+```
+
+The installer also enables hooks in:
+
+```text
+~/.codex/config.toml
+```
+
+by ensuring:
+
+```toml
+[features]
+hooks = true
+```
+
+Codex command hooks receive stdin JSON and this project forwards the payload to `/events`. The bridge prints `{}` to stdout so Codex hook events that require JSON output do not fail.
+
+### Claude Code
+
+Claude Code hooks are written to:
+
+```text
+~/.claude/settings.json
+```
+
+Claude Code uses an exec-style hook entry:
+
+```json
+{
+  "type": "command",
+  "command": "node",
+  "args": ["src/hook-bridge.js", "--source", "claude-code", "..."],
+  "timeout": 3,
+  "async": true,
+  "asyncRewake": false
+}
+```
+
+After installing hooks, restart Claude Code or start a new Claude Code session. In Claude Code, run:
+
+```text
+/hooks
+```
+
+to confirm the external hook configuration is loaded.
+
+### CodeBuddy
+
+CodeBuddy hooks are written to:
+
+```text
+~/.codebuddy/settings.json
+```
+
+CodeBuddy uses a Claude Code-compatible nested hook format:
+
+```json
+{
+  "matcher": "",
+  "hooks": [
+    {
+      "type": "command",
+      "command": "\"node\" \"src/hook-bridge.js\" --source codebuddy ..."
+    }
+  ]
+}
+```
+
+CodeBuddy integration installs 9 events:
+
+```text
+SessionStart
+SessionEnd
+UserPromptSubmit
+PreToolUse
+PostToolUse
+PermissionRequest
+Notification
+PreCompact
+Stop
+```
+
+`PermissionRequest` is installed as an HTTP hook:
+
+```text
+http://127.0.0.1:17861/permission?source=codebuddy&desktop-pet-agent-managed=1
+```
+
+On Windows, CodeBuddy executes hooks through Git Bash. This project quotes Windows paths in generated commands so paths like `D:\node\node.exe` are not broken by shell parsing.
+
+After installing hooks, restart CodeBuddy and run:
+
+```text
+/hooks
+```
+
+If CodeBuddy asks to approve external hook changes, approve the generated Desktop Pet Agent hooks.
+
+## Hook Event Mapping
+
+The runtime normalizes agent events into the fixed pet states:
+
+| Incoming event | Pet state |
+| --- | --- |
+| `SessionStart` | `waving`, then `review` |
+| `UserPromptSubmit` | `review` |
+| `PreToolUse` | `running` or `waiting` for test commands |
+| `PostToolUse` | delayed `review` |
+| `PermissionRequest` | `waiting` |
+| `Notification` | `waving` |
+| `Stop` | `jumping`, then idle or aggregate state |
+| `StopFailure` | `failed`, then idle or aggregate state |
+| `SessionEnd` | clears the session |
+
+OpenPets-style reactions are also accepted:
+
+| Reaction | Pet state |
+| --- | --- |
+| `thinking` | `review` |
+| `working`, `editing`, `running` | `running` |
+| `testing`, `waiting` | `waiting` |
+| `waving` | `waving` |
+| `success`, `done`, `celebrating` | `jumping` |
+| `error`, `failed` | `failed` |
+
+## HTTP API
+
+Health check:
+
+```bash
+curl http://127.0.0.1:17861/health
+```
+
+List pets:
+
+```bash
+curl http://127.0.0.1:17861/pets
+```
+
+List actions:
+
+```bash
+curl http://127.0.0.1:17861/actions
+```
+
+Check hook status:
+
+```bash
+curl http://127.0.0.1:17861/hooks/status
+```
+
+Show a manual state:
+
+```bash
+curl -X POST http://127.0.0.1:17861/state \
+  -H "Content-Type: application/json" \
+  -d '{"state":"working","message":"Agent is working"}'
+```
+
+Send a generic agent event:
+
+```bash
+curl -X POST http://127.0.0.1:17861/events \
+  -H "Content-Type: application/json" \
+  -d '{"source":"claude-code","event":"tool_start","sessionId":"demo","message":"Claude is using a tool"}'
+```
+
+Send a Claude Code or CodeBuddy-style hook payload:
+
+```bash
+curl -X POST http://127.0.0.1:17861/events \
+  -H "Content-Type: application/json" \
+  -d '{"source":"codebuddy","hook_event_name":"UserPromptSubmit","session_id":"demo"}'
+```
+
+Send an OpenPets-style reaction:
+
+```bash
+curl -X POST http://127.0.0.1:17861/events \
+  -H "Content-Type: application/json" \
+  -d '{"source":"openpets","reaction":"thinking","sessionId":"demo"}'
+```
+
+Select active hook source:
+
+```bash
+curl -X POST http://127.0.0.1:17861/hooks/select \
+  -H "Content-Type: application/json" \
+  -d '{"agent":"codebuddy"}'
+```
+
+Resize bubble independently:
+
+```bash
+curl -X POST http://127.0.0.1:17861/bubble/resize \
+  -H "Content-Type: application/json" \
+  -d '{"bubbleScale":1.2}'
+```
+
+Clear sessions:
+
+```bash
+curl -X POST http://127.0.0.1:17861/sessions/clear
+```
+
+PowerShell 5.1 users should send UTF-8 bytes explicitly when sending Chinese text:
 
 ```powershell
+$body = '{"state":"thinking","message":"正在思考"}'
 Invoke-RestMethod `
   -Method Post `
-  -Uri http://127.0.0.1:17861/bubble/resize `
-  -ContentType "application/json" `
-  -Body '{"bubbleScale":1.2}'
+  -Uri http://127.0.0.1:17861/state `
+  -ContentType "application/json; charset=utf-8" `
+  -Body ([System.Text.Encoding]::UTF8.GetBytes($body))
 ```
 
-## 结构
+## Architecture
 
 ```text
-src/main.js                  Electron 主进程，扫描 Codex 宠物包、管理窗口、提供 HTTP API
-src/agent-events.js          agent/hook 事件归一化和 Codex 9 行动作映射
-src/session-manager.js       多 agent 会话状态聚合和优先级选择
-src/hook-bridge.js           真实 hook stdin -> /events 桥接脚本
-src/hook-installer.js        Claude/Codex/CodeBuddy hook 安装器
-src/preload.js               安全 IPC 桥接
-src/renderer/index.html      透明桌面宠物窗口
-src/renderer/renderer.js     Codex spritesheet 播放器和拖拽动作
-src/renderer/styles.css      桌面宠物窗口样式
-src/renderer/bubble.html     独立消息气泡窗口
-src/renderer/bubble.js       气泡测量和消息渲染
-src/renderer/bubble.css      气泡样式
-src/renderer/settings.html   设置页
-src/renderer/settings.js     设置页逻辑
-src/renderer/settings.css    设置页样式
+src/main.js                  Electron main process, windows, settings, HTTP API
+src/agent-events.js          Agent event normalization and state mapping
+src/session-manager.js       Session aggregation and priority state selection
+src/hook-bridge.js           Hook stdin JSON -> local /events bridge
+src/hook-installer.js        Codex, Claude Code, CodeBuddy hook installer
+src/preload.js               Safe IPC bridge
+src/renderer/index.html      Transparent pet window
+src/renderer/renderer.js     Spritesheet player, dragging, resizing
+src/renderer/styles.css      Pet window styles
+src/renderer/bubble.html     Independent message bubble window
+src/renderer/bubble.js       Bubble measurement and rendering
+src/renderer/bubble.css      Bubble styles
+src/renderer/settings.html   Settings window
+src/renderer/settings.js     Settings logic
+src/renderer/settings.css    Settings styles
 ```
+
+## Security And Privacy
+
+- The runtime only listens on `127.0.0.1` by default.
+- Hook payloads may include prompts, tool names, paths, or command summaries depending on the agent.
+- Payloads are forwarded to the local pet runtime only; this project does not send them to a remote service.
+- Recent hook events are kept in memory for the settings panel and are not persisted by this app.
+- The hook installer modifies only managed hook entries marked by this project.
+- Existing agent config files are backed up before writes.
+
+## Troubleshooting
+
+### No pet appears
+
+Check that at least one pet package exists under:
+
+```text
+~/.codex/pets
+~/.codex/pet-runs
+```
+
+Then open:
+
+```text
+http://127.0.0.1:17861/pets
+```
+
+### Hook status is green but no event appears
+
+Restart the target agent after installing hooks. Claude Code and CodeBuddy may not reload changed hook config in already-running sessions.
+
+For Claude Code and CodeBuddy, run:
+
+```text
+/hooks
+```
+
+and confirm the external hook configuration is enabled.
+
+### CodeBuddy does not trigger on Windows
+
+CodeBuddy runs hooks through Git Bash on Windows. Reinstall hooks with:
+
+```bash
+npm run hooks:install -- --agent codebuddy
+```
+
+The generated command should quote Windows paths.
+
+### Chinese text appears as question marks
+
+Use `Content-Type: application/json; charset=utf-8` and send UTF-8 bytes. See the PowerShell example in the HTTP API section.
+
+### Bubble flickers between working and thinking
+
+The runtime debounces `PostToolUse -> review` transitions. If flicker still occurs, check whether another active hook source is sending events. The settings page should show which agent is currently selected.
+
+## Development
+
+Start in dev mode:
+
+```bash
+npm run dev
+```
+
+Run syntax checks manually:
+
+```bash
+node --check src/main.js
+node --check src/hook-installer.js
+node --check src/hook-bridge.js
+```
+
+The project currently does not include a packaged release pipeline. For local hacking, `npm start` is the main workflow.
+
+## Contributing
+
+Desktop Pet Agent is small on purpose: one pet runtime, one local API, and a clear hook adapter layer. The most valuable PRs are integrations and hard compatibility fixes.
+
+Good PR targets:
+
+- add a new agent hook installer;
+- improve hook detection for an existing agent;
+- add platform-specific fixes for Windows, macOS, or Linux;
+- add packaged release support;
+- add tests for hook installer edge cases;
+- improve Codex-compatible pet loading and validation;
+- add documentation for real-world agent setup flows.
+
+For a new agent integration, please include:
+
+- config path and schema documentation;
+- install, doctor, preview, and uninstall behavior;
+- event mapping into the 9 fixed pet states;
+- stdout or HTTP response requirements for blocking hooks;
+- a manual verification command or test script;
+- notes about restart, approval, or security prompts in the target agent.
+
+PRs that make more agents work reliably are especially welcome. The goal is to make this a shared desktop companion layer for the agent ecosystem, not a one-off integration.
+
+## License
+
+MIT. See [LICENSE](LICENSE).

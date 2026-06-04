@@ -1,0 +1,42 @@
+<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Desktop Pet Agent</title>
+  <desc id="desc">A desktop pet face surrounded by connected agent hook nodes.</desc>
+  <defs>
+    <linearGradient id="face" x1="55" y1="37" x2="202" y2="220" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F8FAFC"/>
+      <stop offset="0.52" stop-color="#E0F2FE"/>
+      <stop offset="1" stop-color="#C7D2FE"/>
+    </linearGradient>
+    <linearGradient id="rim" x1="42" y1="48" x2="218" y2="215" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#22D3EE"/>
+      <stop offset="0.5" stop-color="#2563EB"/>
+      <stop offset="1" stop-color="#7C3AED"/>
+    </linearGradient>
+    <filter id="shadow" x="21" y="23" width="214" height="216" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#0F172A" flood-opacity="0.22"/>
+    </filter>
+  </defs>
+
+  <rect width="256" height="256" rx="58" fill="#0F172A"/>
+  <path d="M68 76C43 78 31 92 31 116C31 141 47 155 70 155" stroke="#38BDF8" stroke-width="9" stroke-linecap="round"/>
+  <path d="M188 76C213 78 225 92 225 116C225 141 209 155 186 155" stroke="#A78BFA" stroke-width="9" stroke-linecap="round"/>
+
+  <g filter="url(#shadow)">
+    <path d="M128 39C168.3 39 201 71.7 201 112V141C201 181.3 168.3 214 128 214C87.7 214 55 181.3 55 141V112C55 71.7 87.7 39 128 39Z" fill="url(#face)" stroke="url(#rim)" stroke-width="10"/>
+  </g>
+
+  <circle cx="96" cy="123" r="11" fill="#0F172A"/>
+  <circle cx="160" cy="123" r="11" fill="#0F172A"/>
+  <path d="M108 158C119 168 137 168 148 158" stroke="#0F172A" stroke-width="9" stroke-linecap="round"/>
+  <path d="M93 91C106 83 117 83 127 91" stroke="#334155" stroke-width="7" stroke-linecap="round"/>
+  <path d="M129 91C140 83 152 83 164 91" stroke="#334155" stroke-width="7" stroke-linecap="round"/>
+
+  <path d="M53 185L91 168" stroke="#38BDF8" stroke-width="8" stroke-linecap="round"/>
+  <path d="M203 185L165 168" stroke="#A78BFA" stroke-width="8" stroke-linecap="round"/>
+  <circle cx="45" cy="190" r="17" fill="#14B8A6"/>
+  <circle cx="211" cy="190" r="17" fill="#8B5CF6"/>
+  <circle cx="128" cy="31" r="14" fill="#F59E0B"/>
+  <path d="M128 45V64" stroke="#F59E0B" stroke-width="8" stroke-linecap="round"/>
+
+  <path d="M104 198H152" stroke="#0F172A" stroke-width="8" stroke-linecap="round"/>
+</svg>
