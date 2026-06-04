@@ -239,8 +239,8 @@ function createWindow() {
 function createBubbleWindow() {
   bubbleReady = false;
   bubbleWin = new BrowserWindow({
-    width: 340,
-    height: 260,
+    width: 280,
+    height: 96,
     frame: false,
     transparent: true,
     resizable: false,
@@ -329,8 +329,8 @@ function positionBubble(size = {}) {
   const spriteCenterX = petBounds.x + spriteLeft + spriteWidth / 2;
   const gap = 6;
   const margin = 8;
-  const width = Math.ceil(Number(size.width) || 320);
-  const height = Math.ceil(Number(size.height) || 110);
+  const width = Math.ceil(Number(size.width) || 280);
+  const height = Math.ceil(Number(size.height) || 96);
   const topY = spriteTop - height - gap;
   const bottomY = spriteTop + spriteHeight + gap;
 
