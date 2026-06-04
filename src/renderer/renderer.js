@@ -80,9 +80,10 @@ function applyZoom(nextZoom) {
   document.documentElement.style.setProperty("--pet-width", `${168 * zoom}px`);
   document.documentElement.style.setProperty("--pet-height", `${184 * zoom}px`);
   document.documentElement.style.setProperty("--sprite-left", `${1 * zoom}px`);
-  document.documentElement.style.setProperty("--handle-size", `${34 * zoom}px`);
-  document.documentElement.style.setProperty("--handle-right", `${28 * zoom}px`);
-  document.documentElement.style.setProperty("--handle-bottom", `${46 * zoom}px`);
+  document.documentElement.style.setProperty("--handle-size", `${28 * zoom}px`);
+  document.documentElement.style.setProperty("--handle-icon-size", `${17 * zoom}px`);
+  document.documentElement.style.setProperty("--handle-right", `${34 * zoom}px`);
+  document.documentElement.style.setProperty("--handle-bottom", `${52 * zoom}px`);
   updateSpriteMetrics();
   drawFrame();
 }
