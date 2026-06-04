@@ -6,6 +6,7 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron .",
+    "test": "node --test",
     "hooks:doctor": "node src/hook-installer.js doctor",
     "hooks:preview": "node src/hook-installer.js preview",
     "hooks:install": "node src/hook-installer.js install",

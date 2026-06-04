@@ -1,19 +1,22 @@
-const { app, BrowserWindow, Menu, Tray, ipcMain, nativeImage, screen } = require("electron");
+const { app, BrowserWindow, Menu, Tray, ipcMain, nativeImage, screen, shell, dialog } = require("electron");
 const fs = require("node:fs");
 const http = require("node:http");
 const os = require("node:os");
 const path = require("node:path");
-const { pathToFileURL } = require("node:url");
 const { AGENTS, buildDecision } = require("./agent-events");
 const { AGENT_CONFIGS, doctorHooks, installHooks } = require("./hook-installer");
+const {
+  discoverPets: discoverPetsInRoot,
+  getActivePetsRoot,
+  toPetPayload
+} = require("./pet-library");
 const { SessionManager } = require("./session-manager");
 
 const API_HOST = "127.0.0.1";
 const API_PORT = Number(process.env.PET_PORT || 17861);
 const CODEX_HOME = process.env.CODEX_HOME || path.join(os.homedir(), ".codex");
-const PETS_DIR = path.join(CODEX_HOME, "pets");
-const PET_RUNS_DIR = path.join(CODEX_HOME, "pet-runs");
-const LOGO_PATH = path.join(__dirname, "assets", "logo.svg");
+const LOGO_PATH = path.join(__dirname, "assets", "logo.png");
+const BUNDLED_PETS_ROOT = path.join(__dirname, "assets", "pets");
 const BASE_WINDOW_WIDTH = 240;
 const BASE_WINDOW_HEIGHT = 286;
 const MIN_ZOOM = 0.65;
@@ -117,8 +120,7 @@ function readJson(filePath) {
 
 function createAppIcon() {
   try {
-    const svg = fs.readFileSync(LOGO_PATH, "utf8");
-    const image = nativeImage.createFromDataURL(`data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`);
+    const image = nativeImage.createFromPath(LOGO_PATH);
     if (!image.isEmpty()) return image;
   } catch (error) {
     console.warn(`Failed to load app logo: ${error.message}`);
@@ -146,81 +148,18 @@ function saveSettings() {
   }
 }
 
-function listDirectories(root) {
-  try {
-    return fs.readdirSync(root, { withFileTypes: true })
-      .filter((entry) => entry.isDirectory())
-      .map((entry) => path.join(root, entry.name));
-  } catch {
-    return [];
-  }
-}
-
-function toPetPayload(pet) {
-  if (!pet) return null;
-  return {
-    id: pet.id,
-    key: pet.key,
-    displayName: pet.displayName,
-    description: pet.description,
-    source: pet.source,
-    root: pet.root,
-    spritesheetPath: pet.spritesheetPath,
-    spritesheetUrl: pathToFileURL(pet.spritesheetPath).toString()
-  };
-}
-
-function discoverInstalledPets() {
-  return listDirectories(PETS_DIR)
-    .map((dir) => {
-      const manifest = readJson(path.join(dir, "pet.json")) || {};
-      const id = String(manifest.id || path.basename(dir));
-      const spritesheetPath = path.resolve(dir, manifest.spritesheetPath || "spritesheet.webp");
-
-      if (!fs.existsSync(spritesheetPath)) return null;
-
-      return {
-        id,
-        key: `pets:${id}`,
-        displayName: String(manifest.displayName || id),
-        description: String(manifest.description || ""),
-        source: "pets",
-        root: dir,
-        spritesheetPath
-      };
-    })
-    .filter(Boolean);
-}
-
-function discoverRunPets() {
-  return listDirectories(PET_RUNS_DIR)
-    .map((dir) => {
-      const request = readJson(path.join(dir, "pet_request.json")) || {};
-      const id = String(request.pet_id || path.basename(dir));
-      const spritesheetPath = path.join(dir, "final", "spritesheet.webp");
-
-      if (!fs.existsSync(spritesheetPath)) return null;
-
-      return {
-        id,
-        key: `pet-runs:${id}`,
-        displayName: String(request.display_name || id),
-        description: String(request.description || ""),
-        source: "pet-runs",
-        root: dir,
-        spritesheetPath
-      };
-    })
-    .filter(Boolean);
-}
-
 function discoverPets() {
-  const installed = discoverInstalledPets();
-  const runs = discoverRunPets();
-  pets = [...installed, ...runs];
-
+  const storage = getPetStorageInfo();
+  pets = discoverPetsInRoot(storage.petsRoot, { bundledPetsRoot: BUNDLED_PETS_ROOT });
   const preferred = process.env.PET_ID || settings.activePetKey;
   activePet = pets.find((pet) => pet.id === preferred || pet.key === preferred) || pets[0] || null;
+}
+
+function getPetStorageInfo() {
+  return getActivePetsRoot({
+    codexHome: CODEX_HOME,
+    settings
+  });
 }
 
 function createWindow() {
@@ -568,7 +507,54 @@ function selectPet(idOrKey, source) {
   return true;
 }
 
+function selectPetStorage(storageId, customDir) {
+  const requested = String(storageId || "codex");
+  if (requested === "custom") {
+    if (!customDir && !settings.customPetsDir) {
+      return { ok: false, error: "请先选择自定义宠物文件夹", storage: getPetStorageInfo() };
+    }
+    if (customDir) settings.customPetsDir = path.resolve(String(customDir));
+  }
+  settings.petStorage = ["codex", "custom"].includes(requested) ? requested : "codex";
+  settings.activePetKey = "";
+  saveSettings();
+  discoverPets();
+  broadcastPet();
+  return {
+    ok: true,
+    storage: getPetStorageInfo(),
+    pets: pets.map(toPetPayload),
+    activePet: toPetPayload(activePet)
+  };
+}
+
+async function chooseCustomPetStorage() {
+  const result = await dialog.showOpenDialog(settingsWin || win, {
+    title: "选择宠物文件夹",
+    properties: ["openDirectory", "createDirectory"]
+  });
+  if (result.canceled || !result.filePaths[0]) {
+    return { ok: false, canceled: true, storage: getPetStorageInfo() };
+  }
+  return selectPetStorage("custom", result.filePaths[0]);
+}
+
+async function openPetFolder(kind = "current") {
+  const storage = getPetStorageInfo();
+  const options = {
+    current: storage.petsRoot,
+    codex: storage.codexPetsRoot,
+    custom: storage.customPetsRoot
+  };
+  const target = options[kind] || options.current;
+  if (!target) return { ok: false, error: "目录尚未配置", storage };
+  fs.mkdirSync(target, { recursive: true });
+  const error = await shell.openPath(target);
+  return { ok: !error, error, path: target, storage };
+}
+
 function buildInitialPayload() {
+  const storage = getPetStorageInfo();
   return {
     ...currentState,
     normalizedState: normalizeState(currentState.state),
@@ -577,8 +563,12 @@ function buildInitialPayload() {
     activePet: toPetPayload(activePet),
     config: {
       apiBaseUrl: `http://${API_HOST}:${API_PORT}`,
-      petsRoot: PETS_DIR,
-      petRunsRoot: PET_RUNS_DIR,
+      petsRoot: storage.petsRoot,
+      petStorage: storage.petStorage,
+      petStorageOptions: storage.options,
+      codexPetsRoot: storage.codexPetsRoot,
+      customPetsRoot: storage.customPetsRoot,
+      bundledPetsRoot: BUNDLED_PETS_ROOT,
       settingsPath: getSettingsPath(),
       agents: AGENTS,
       hookStatus: getHookStatus(),
@@ -799,14 +789,15 @@ async function handleApiRequest(req, res) {
   }
 
   if (url.pathname === "/health") {
+    const storage = getPetStorageInfo();
     sendJson(res, 200, {
       ok: true,
       state: currentState,
       agentSessions: agentSessions.snapshot(),
       actions: ACTIONS,
       activePet: toPetPayload(activePet),
-      petsRoot: PETS_DIR,
-      petRunsRoot: PET_RUNS_DIR
+      petsRoot: storage.petsRoot,
+      petStorage: storage.petStorage
     });
     return;
   }
@@ -817,8 +808,20 @@ async function handleApiRequest(req, res) {
       ok: true,
       actions: ACTIONS,
       activePet: toPetPayload(activePet),
-      pets: pets.map(toPetPayload)
+      pets: pets.map(toPetPayload),
+      storage: getPetStorageInfo()
     });
+    return;
+  }
+
+  if (url.pathname === "/pets/storage" && req.method === "POST") {
+    try {
+      const body = await parseJsonBody(req);
+      const result = selectPetStorage(body.storage, body.customDir);
+      sendJson(res, result.ok ? 200 : 400, result);
+    } catch (error) {
+      sendJson(res, 400, { ok: false, error: error.message, storage: getPetStorageInfo() });
+    }
     return;
   }
 
@@ -1102,7 +1105,8 @@ app.whenReady().then(() => {
       ok: true,
       pets: pets.map(toPetPayload),
       activePet: toPetPayload(activePet),
-      actions: ACTIONS
+      actions: ACTIONS,
+      storage: getPetStorageInfo()
     };
   });
   ipcMain.handle("pet:get-hook-status", () => {
@@ -1125,6 +1129,27 @@ app.whenReady().then(() => {
   ipcMain.handle("pet:select-pet", (_event, payload) => {
     const ok = selectPet(String(payload?.id || payload?.key || ""), payload?.source);
     return { ok, activePet: toPetPayload(activePet), pets: pets.map(toPetPayload) };
+  });
+  ipcMain.handle("pet:select-storage", (_event, payload) => {
+    try {
+      return selectPetStorage(payload?.storage, payload?.customDir);
+    } catch (error) {
+      return { ok: false, error: error.message, storage: getPetStorageInfo(), pets: pets.map(toPetPayload), activePet: toPetPayload(activePet) };
+    }
+  });
+  ipcMain.handle("pet:choose-custom-storage", async () => {
+    try {
+      return await chooseCustomPetStorage();
+    } catch (error) {
+      return { ok: false, error: error.message, storage: getPetStorageInfo(), pets: pets.map(toPetPayload), activePet: toPetPayload(activePet) };
+    }
+  });
+  ipcMain.handle("pet:open-folder", async (_event, payload) => {
+    try {
+      return await openPetFolder(payload?.kind);
+    } catch (error) {
+      return { ok: false, error: error.message, storage: getPetStorageInfo() };
+    }
   });
   ipcMain.handle("pet:set-state", (_event, payload) => {
     const state = String(payload?.state || "idle");
