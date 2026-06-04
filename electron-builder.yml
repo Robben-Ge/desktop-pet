@@ -1,0 +1,65 @@
+appId: com.yby6.desktop-pet
+productName: Desktop Pet Agent
+copyright: Copyright © 2026 yangbuyiya
+icon: src/assets/logo.png
+
+directories:
+  output: dist
+
+files:
+  - src/**
+  - package.json
+  - LICENSE
+  - README.md
+  - README.zh-CN.md
+  - '!**/.DS_Store'
+  - '!**/*.map'
+  - '!**/test/**'
+  - '!**/.github/**'
+  - '!scripts/**'
+
+asar: true
+
+win:
+  executableName: Desktop Pet Agent
+  target:
+    - target: nsis
+      arch:
+        - x64
+
+nsis:
+  oneClick: false
+  allowElevation: true
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: always
+  createStartMenuShortcut: true
+  shortcutName: Desktop Pet Agent
+  uninstallDisplayName: Desktop Pet Agent
+  artifactName: Desktop-Pet-Agent-${version}-${platform}-${arch}.${ext}
+
+mac:
+  category: public.app-category.developer-tools
+  extendInfo:
+    LSUIElement: true
+  target:
+    - dmg
+    - zip
+  artifactName: Desktop-Pet-Agent-${version}-${platform}-${arch}.${ext}
+  hardenedRuntime: false
+  gatekeeperAssess: false
+  notarize: false
+
+npmRebuild: false
+
+publish:
+  provider: github
+  owner: yangbuyiya
+  repo: desktop-pet
+
+releaseInfo:
+  releaseNotes: |
+    ## Desktop Pet Agent 发布版本
+
+    - 发布 Windows x64 安装包
+    - 发布 macOS universal 安装包
+    - 接入 GitHub Releases 自动更新

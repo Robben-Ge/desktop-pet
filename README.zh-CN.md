@@ -41,6 +41,24 @@ npm start
 npm test
 ```
 
+本地打包验证：
+
+```bash
+npm run build:unpack
+```
+
+## 发布与自动更新
+
+项目使用 GitHub Actions 和 `electron-builder` 发布版本。推送 `v*` tag 后会构建 Windows x64 与 macOS universal 安装包，并上传到 [GitHub Releases](https://github.com/yangbuyiya/desktop-pet/releases)。自动更新同样从该 Release 读取 `latest.yml` 和 `latest-mac.yml`。
+
+发布新版本：
+
+```bash
+./scripts/release-publish.sh 0.1.1
+```
+
+也可以在 GitHub Actions 的 `release` workflow 手动输入 tag 触发构建。
+
 本地 API 默认监听：
 
 ```text
