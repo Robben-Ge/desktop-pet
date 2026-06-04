@@ -22,6 +22,7 @@ const MAX_BUBBLE_SCALE = 1.6;
 const MAX_BUBBLE_ITEMS = 3;
 const MAX_RECENT_HOOK_EVENTS = 40;
 const DEFAULT_ACTIVE_HOOK_AGENT = "codex";
+const REVIEW_AFTER_RUNNING_DEBOUNCE_MS = 1400;
 
 const VALID_STATES = new Set([
   "idle",
@@ -53,6 +54,8 @@ let settings = {};
 let stateBeforeDrag = null;
 let bubbleTimer = null;
 let agentReturnTimer = null;
+let agentReviewDebounceTimer = null;
+let pendingReviewDecision = null;
 let bubbleReady = false;
 let pendingBubblePayload = null;
 const agentSessions = new SessionManager();
@@ -451,7 +454,43 @@ function broadcastAgentAggregate() {
   });
 }
 
-function applyAgentDecision(decision) {
+function clearAgentReviewDebounce() {
+  if (agentReviewDebounceTimer) {
+    clearTimeout(agentReviewDebounceTimer);
+    agentReviewDebounceTimer = null;
+  }
+  pendingReviewDecision = null;
+}
+
+function shouldDebounceReviewDecision(decision) {
+  if (!decision || decision.terminal || decision.visualState) return false;
+  if (decision.persistentState !== "review") return false;
+  if (decision.event !== "tool_end" && decision.event !== "review") return false;
+  if (normalizeState(currentState.state) !== "running") return false;
+  if (currentState.source && decision.source && currentState.source !== decision.source) return false;
+  if (currentState.sessionId && decision.sessionId && currentState.sessionId !== decision.sessionId) return false;
+  return true;
+}
+
+function buildDeferredAgentResult(decision) {
+  const aggregate = agentSessions.getAggregate();
+  return {
+    deferred: true,
+    display: {
+      state: currentState.state,
+      message: currentState.message || aggregate.message || "",
+      source: currentState.source || decision.source,
+      sessionId: currentState.sessionId || decision.sessionId,
+      agentEvent: decision.event,
+      durationMs: 0,
+      returnState: aggregate
+    },
+    aggregate,
+    sessions: agentSessions.list()
+  };
+}
+
+function commitAgentDecision(decision) {
   if (agentReturnTimer) {
     clearTimeout(agentReturnTimer);
     agentReturnTimer = null;
@@ -475,6 +514,22 @@ function applyAgentDecision(decision) {
   }
 
   return result;
+}
+
+function applyAgentDecision(decision) {
+  if (shouldDebounceReviewDecision(decision)) {
+    clearAgentReviewDebounce();
+    pendingReviewDecision = decision;
+    agentReviewDebounceTimer = setTimeout(() => {
+      const queuedDecision = pendingReviewDecision;
+      clearAgentReviewDebounce();
+      if (queuedDecision) commitAgentDecision(queuedDecision);
+    }, REVIEW_AFTER_RUNNING_DEBOUNCE_MS);
+    return buildDeferredAgentResult(decision);
+  }
+
+  clearAgentReviewDebounce();
+  return commitAgentDecision(decision);
 }
 
 function broadcastPet() {
@@ -557,6 +612,7 @@ function selectHookAgent(agentId) {
   settings.activeHookAgent = activeHookAgent;
   saveSettings();
   agentSessions.clear();
+  clearAgentReviewDebounce();
   broadcastState({ state: "idle", message: "", source: null, sessionId: null, agentEvent: "select-hook-agent", sessions: [] });
   return {
     ok: true,
@@ -793,6 +849,7 @@ async function handleApiRequest(req, res) {
       clearTimeout(agentReturnTimer);
       agentReturnTimer = null;
     }
+    clearAgentReviewDebounce();
     broadcastState({ state: "idle", message: "", source: null, sessionId: null, agentEvent: "clear", sessions: [] });
     sendJson(res, 200, { ok: true, ...snapshot });
     return;
