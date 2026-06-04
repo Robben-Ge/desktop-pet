@@ -172,6 +172,7 @@ async function startDrag(event) {
     pointerId: event.pointerId,
     startScreenX: event.screenX,
     startScreenY: event.screenY,
+    lastScreenX: event.screenX,
     windowX: bounds.x,
     windowY: bounds.y
   };
@@ -183,14 +184,16 @@ function moveDrag(event) {
   if (!dragStart || event.pointerId !== dragStart.pointerId) return;
   const dx = event.screenX - dragStart.startScreenX;
   const dy = event.screenY - dragStart.startScreenY;
+  const stepX = event.screenX - dragStart.lastScreenX;
+  dragStart.lastScreenX = event.screenX;
 
   window.desktopPet.moveWindow({
     x: dragStart.windowX + dx,
     y: dragStart.windowY + dy
   });
 
-  if (Math.abs(dx) < 4) return;
-  const direction = dx > 0 ? "running-right" : "running-left";
+  if (Math.abs(stepX) < 1) return;
+  const direction = stepX > 0 ? "running-right" : "running-left";
   if (direction !== lastDragDirection) {
     lastDragDirection = direction;
     window.desktopPet.setDragDirection(direction);
