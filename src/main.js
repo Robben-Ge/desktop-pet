@@ -46,6 +46,8 @@ let activePet = null;
 let settings = {};
 let stateBeforeDrag = null;
 let bubbleTimer = null;
+let bubbleReady = false;
+let pendingBubblePayload = null;
 let currentState = {
   state: "idle",
   normalizedState: "idle",
@@ -226,6 +228,7 @@ function createWindow() {
 }
 
 function createBubbleWindow() {
+  bubbleReady = false;
   bubbleWin = new BrowserWindow({
     width: 280,
     height: 96,
@@ -246,9 +249,18 @@ function createBubbleWindow() {
   });
 
   bubbleWin.setAlwaysOnTop(true, "floating");
+  bubbleWin.setIgnoreMouseEvents(true);
   bubbleWin.loadFile(path.join(__dirname, "renderer", "bubble.html"));
+  bubbleWin.webContents.once("did-finish-load", () => {
+    bubbleReady = true;
+    if (pendingBubblePayload) {
+      bubbleWin.webContents.send("bubble:set-message", pendingBubblePayload);
+      pendingBubblePayload = null;
+    }
+  });
   bubbleWin.on("closed", () => {
     bubbleWin = null;
+    bubbleReady = false;
   });
 }
 
@@ -327,10 +339,20 @@ function showBubble(message) {
     return;
   }
 
-  bubbleWin.webContents.send("bubble:set-message", {
+  const payload = {
     message,
     bubbleScale: clampBubbleScale(settings.bubbleScale || 1)
-  });
+  };
+
+  positionBubble();
+  bubbleWin.showInactive();
+
+  if (bubbleReady) {
+    bubbleWin.webContents.send("bubble:set-message", payload);
+  } else {
+    pendingBubblePayload = payload;
+  }
+
   bubbleTimer = setTimeout(() => {
     if (bubbleWin && !bubbleWin.isDestroyed()) bubbleWin.hide();
   }, 4200);
