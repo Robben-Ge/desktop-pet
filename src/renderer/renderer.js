@@ -80,8 +80,6 @@ function applyZoom(nextZoom) {
   document.documentElement.style.setProperty("--pet-width", `${168 * zoom}px`);
   document.documentElement.style.setProperty("--pet-height", `${184 * zoom}px`);
   document.documentElement.style.setProperty("--sprite-left", `${1 * zoom}px`);
-  document.documentElement.style.setProperty("--handle-size", `${28 * zoom}px`);
-  document.documentElement.style.setProperty("--handle-icon-size", `${17 * zoom}px`);
   document.documentElement.style.setProperty("--handle-right", `${34 * zoom}px`);
   document.documentElement.style.setProperty("--handle-bottom", `${52 * zoom}px`);
   updateSpriteMetrics();
@@ -126,6 +124,9 @@ function setAnimationState(state) {
   currentState = ROWS[normalized] ? normalized : "idle";
   frameIndex = 0;
   pet.dataset.state = currentState;
+  if (currentState !== "idle" && !resizeStart) {
+    stage.classList.remove("show-resize");
+  }
   drawFrame();
   scheduleNextFrame();
 }
@@ -198,6 +199,7 @@ function endDrag(event) {
 }
 
 function showResizeHandle() {
+  if (currentState !== "idle" && !resizeStart) return;
   clearTimeout(hideResizeTimer);
   stage.classList.add("show-resize");
 }

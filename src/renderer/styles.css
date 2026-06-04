@@ -15,8 +15,6 @@
   --pet-width: 168px;
   --pet-height: 184px;
   --sprite-left: 1px;
-  --handle-size: 28px;
-  --handle-icon-size: 17px;
   --handle-right: 34px;
   --handle-bottom: 52px;
 }
@@ -97,8 +95,8 @@ body {
   position: absolute;
   right: var(--handle-right);
   bottom: var(--handle-bottom);
-  width: var(--handle-size);
-  height: var(--handle-size);
+  width: 28px;
+  height: 28px;
   display: grid;
   place-items: center;
   border: 1px solid rgba(20, 32, 48, 0.08);
@@ -117,11 +115,18 @@ body {
   pointer-events: none;
 }
 
-.stage.show-resize .resize-handle,
+.pet[data-state="idle"] ~ .resize-handle,
 .resize-handle:focus-visible {
   opacity: 0.86;
   transform: translateY(0) scale(1);
   pointer-events: auto;
+}
+
+.stage:not(.show-resize) .resize-handle,
+.pet:not([data-state="idle"]) ~ .resize-handle {
+  opacity: 0;
+  transform: translateY(2px) scale(0.94);
+  pointer-events: none;
 }
 
 .resize-handle:hover,
@@ -133,8 +138,8 @@ body {
 }
 
 .resize-icon {
-  width: var(--handle-icon-size);
-  height: var(--handle-icon-size);
+  width: 16px;
+  height: 16px;
   display: block;
   pointer-events: none;
 }
