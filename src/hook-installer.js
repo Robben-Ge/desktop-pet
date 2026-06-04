@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 const fs = require("node:fs");
+const childProcess = require("node:child_process");
 const os = require("node:os");
 const path = require("node:path");
 
@@ -33,6 +34,7 @@ const AGENT_CONFIGS = {
   codex: {
     label: "Codex",
     settingsPath: () => path.join(process.env.CODEX_HOME || path.join(os.homedir(), ".codex"), "hooks.json"),
+    configPath: () => path.join(process.env.CODEX_HOME || path.join(os.homedir(), ".codex"), "config.toml"),
     format: "codex",
     source: "codex",
     events: [
@@ -98,7 +100,7 @@ function shellQuote(value) {
 }
 
 function buildBridgeCommand(agent, event, options = {}) {
-  const nodeBin = options.nodeBin || process.execPath;
+  const nodeBin = options.nodeBin || resolveNodeBin();
   const bridgePath = path.join(__dirname, "hook-bridge.js");
   const apiBase = options.apiBase || API_BASE;
   return [
@@ -112,6 +114,48 @@ function buildBridgeCommand(agent, event, options = {}) {
     apiBase,
     MARKER
   ].join(" ");
+}
+
+function resolveNodeBin() {
+  const candidates = [
+    process.env.DESKTOP_PET_AGENT_NODE,
+    process.env.NODE_REPL_NODE_PATH,
+    process.execPath,
+    ...findNodeOnPath()
+  ].filter(Boolean);
+
+  for (const candidate of candidates) {
+    const base = path.basename(String(candidate)).toLowerCase();
+    if (base === "node.exe" || base === "node") return String(candidate);
+  }
+
+  return "node";
+}
+
+function findNodeOnPath() {
+  try {
+    const command = process.platform === "win32" ? "where" : "which";
+    const output = childProcess.execFileSync(command, ["node"], {
+      encoding: "utf8",
+      windowsHide: true,
+      stdio: ["ignore", "pipe", "ignore"]
+    });
+    return output.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+function managedHookUsesNode(value) {
+  if (!value || typeof value !== "object") return true;
+  for (const key of ["command", "commandWindows"]) {
+    const command = value[key];
+    if (typeof command === "string" && command.includes(MARKER)) {
+      return /(?:^|[\\/"'\s])node(?:\.exe)?(?:["'\s]|$)/i.test(command) && !/electron(?:\.exe)?/i.test(command);
+    }
+  }
+  if (Array.isArray(value.hooks)) return value.hooks.every(managedHookUsesNode);
+  return true;
 }
 
 function containsManagedHook(value) {
@@ -209,6 +253,11 @@ function installHooks(agentId, options = {}) {
     writeJsonAtomic(settingsPath, next);
   }
 
+  let codexConfig = null;
+  if (!options.preview && agent.format === "codex") {
+    codexConfig = ensureCodexHooksFeature(agent, options);
+  }
+
   return {
     agent: agentId,
     label: agent.label,
@@ -217,6 +266,7 @@ function installHooks(agentId, options = {}) {
     added,
     removed,
     backupPath,
+    codexConfig,
     preview: next
   };
 }
@@ -259,8 +309,11 @@ function doctorHooks(agentId, options = {}) {
   const hooks = settings.hooks && typeof settings.hooks === "object" ? settings.hooks : {};
   const missing = agent.events.filter((event) => {
     const entries = hooks[event];
-    return !Array.isArray(entries) || !entries.some(containsManagedHook);
+    return !Array.isArray(entries) || !entries.some((entry) => containsManagedHook(entry) && managedHookUsesNode(entry));
   });
+  const invalidCommands = countInvalidManagedCommands(hooks);
+  const codexFeature = agent.format === "codex" ? getCodexHooksFeature(agent, options) : null;
+  const missingFeature = codexFeature && codexFeature.enabled !== true;
 
   return {
     agent: agentId,
@@ -268,10 +321,106 @@ function doctorHooks(agentId, options = {}) {
     settingsPath,
     exists: fs.existsSync(settingsPath),
     valid,
-    status: valid && missing.length === 0 ? "installed" : (valid ? "not_installed" : "error"),
+    status: valid && missing.length === 0 && invalidCommands === 0 && !missingFeature
+      ? "installed"
+      : (valid ? "not_installed" : "error"),
     missing,
+    invalidCommands,
+    codexFeature,
     error
   };
+}
+
+function countInvalidManagedCommands(hooks) {
+  let count = 0;
+  if (!hooks || typeof hooks !== "object") return count;
+  for (const entries of Object.values(hooks)) {
+    if (!Array.isArray(entries)) continue;
+    for (const entry of entries) {
+      if (containsManagedHook(entry) && !managedHookUsesNode(entry)) count += 1;
+    }
+  }
+  return count;
+}
+
+function getCodexHooksFeature(agent, options = {}) {
+  const configPath = options.configPath || agent.configPath?.();
+  if (!configPath) return null;
+  if (!fs.existsSync(configPath)) {
+    return { configPath, exists: false, enabled: false };
+  }
+
+  const text = fs.readFileSync(configPath, "utf8");
+  const section = findTomlSection(text, "features");
+  if (!section) return { configPath, exists: true, enabled: false };
+  const body = text.slice(section.bodyStart, section.bodyEnd);
+  const match = body.match(/^\s*hooks\s*=\s*(true|false)\s*(?:#.*)?$/mi);
+  return {
+    configPath,
+    exists: true,
+    enabled: match ? match[1] === "true" : false
+  };
+}
+
+function ensureCodexHooksFeature(agent, options = {}) {
+  const configPath = options.configPath || agent.configPath?.();
+  if (!configPath) return null;
+
+  let text = "";
+  if (fs.existsSync(configPath)) text = fs.readFileSync(configPath, "utf8");
+  const next = setTomlFeature(text, "hooks", "true");
+  if (next === text) {
+    return { configPath, changed: false, backupPath: null };
+  }
+
+  fs.mkdirSync(path.dirname(configPath), { recursive: true });
+  const backupPath = backupFile(configPath);
+  fs.writeFileSync(configPath, next, "utf8");
+  return { configPath, changed: true, backupPath };
+}
+
+function setTomlFeature(text, key, value) {
+  const normalized = text || "";
+  const section = findTomlSection(normalized, "features");
+  const line = `${key} = ${value}`;
+
+  if (!section) {
+    const prefix = normalized && !normalized.endsWith("\n") ? `${normalized}\n\n` : normalized;
+    return `${prefix}[features]\n${line}\n`;
+  }
+
+  const before = normalized.slice(0, section.bodyStart);
+  const body = normalized.slice(section.bodyStart, section.bodyEnd);
+  const after = normalized.slice(section.bodyEnd);
+  const regex = new RegExp(`^(\\s*)${escapeRegex(key)}\\s*=\\s*(true|false)(\\s*(?:#.*)?)$`, "mi");
+
+  if (regex.test(body)) {
+    const nextBody = body.replace(regex, `$1${key} = ${value}$3`);
+    return `${before}${nextBody}${after}`;
+  }
+
+  const separator = body.endsWith("\n") || body.length === 0 ? "" : "\n";
+  return `${before}${body}${separator}${line}\n${after}`;
+}
+
+function findTomlSection(text, name) {
+  const sectionRegex = /^\s*\[([^\]]+)\]\s*$/gm;
+  let match;
+  while ((match = sectionRegex.exec(text)) !== null) {
+    if (match[1].trim() !== name) continue;
+    const bodyStart = sectionRegex.lastIndex;
+    const next = sectionRegex.exec(text);
+    return {
+      headerStart: match.index,
+      bodyStart,
+      bodyEnd: next ? next.index : text.length
+    };
+  }
+  return null;
+}
+
+function escapeRegex(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function resolveAgent(agentId) {

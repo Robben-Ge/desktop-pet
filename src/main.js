@@ -507,6 +507,8 @@ function getHookStatus() {
 function describeHookStatus(result, configuredCount) {
   if (result.status === "installed") return "已接入";
   if (result.status === "error") return result.error || "配置文件无法解析";
+  if (result.invalidCommands > 0) return `有 ${result.invalidCommands} 个 hook 命令不是 Node，需要修复`;
+  if (result.codexFeature && result.codexFeature.enabled !== true) return "Codex hooks feature 未启用";
   if (!result.exists) return "配置文件不存在，尚未安装 hook";
   if (configuredCount > 0) return `缺少 ${result.missing.length} 个事件`;
   return "未发现本项目管理的 hook";
