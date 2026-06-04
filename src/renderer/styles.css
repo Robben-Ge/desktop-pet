@@ -4,12 +4,6 @@
 
 :root {
   --zoom: 1;
-  --bubble-left: 12px;
-  --bubble-top: 6px;
-  --bubble-padding-y: 8px;
-  --bubble-padding-x: 10px;
-  --bubble-font-size: 13px;
-  --bubble-min-height: 38px;
   --pet-left: 36px;
   --pet-bottom: 12px;
   --pet-width: 168px;
@@ -35,33 +29,6 @@ body {
   width: 100vw;
   height: 100vh;
   -webkit-app-region: no-drag;
-}
-
-.bubble {
-  position: absolute;
-  top: var(--bubble-top);
-  left: var(--bubble-left);
-  right: var(--bubble-left);
-  min-height: var(--bubble-min-height);
-  padding: var(--bubble-padding-y) var(--bubble-padding-x);
-  border: 1px solid rgba(24, 34, 47, 0.14);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.92);
-  color: #18222f;
-  font-size: var(--bubble-font-size);
-  line-height: 1.25;
-  text-align: center;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
-  opacity: 0;
-  transform: translateY(8px);
-  transition: opacity 160ms ease, transform 160ms ease;
-  pointer-events: none;
-  z-index: 2;
-}
-
-.bubble.show {
-  opacity: 1;
-  transform: translateY(0);
 }
 
 .pet {

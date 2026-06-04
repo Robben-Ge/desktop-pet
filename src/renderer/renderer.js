@@ -2,7 +2,6 @@ const pet = document.getElementById("pet");
 const stage = document.querySelector(".stage");
 const sprite = document.getElementById("sprite");
 const fallback = document.getElementById("fallback");
-const bubble = document.getElementById("bubble");
 const resizeHandle = document.getElementById("resizeHandle");
 
 const CELL_WIDTH = 192;
@@ -38,7 +37,6 @@ let currentPet = null;
 let currentState = "idle";
 let frameIndex = 0;
 let frameTimer = null;
-let bubbleTimer = null;
 let dragStart = null;
 let lastDragDirection = null;
 let zoom = 1;
@@ -49,18 +47,6 @@ let bubbleScale = 1;
 function normalizeState(state) {
   const requested = state || "idle";
   return STATE_ALIASES[requested] || requested;
-}
-
-function showMessage(message) {
-  if (!message) {
-    bubble.classList.remove("show");
-    return;
-  }
-
-  bubble.textContent = message;
-  bubble.classList.add("show");
-  clearTimeout(bubbleTimer);
-  bubbleTimer = setTimeout(() => bubble.classList.remove("show"), 4200);
 }
 
 function clampZoom(value) {
@@ -84,12 +70,6 @@ function applyZoom(nextZoom) {
 function applyBubbleScale(nextScale) {
   bubbleScale = Number.isFinite(Number(nextScale)) ? Number(nextScale) : 1;
   bubbleScale = Math.max(0.75, Math.min(1.6, bubbleScale));
-  document.documentElement.style.setProperty("--bubble-left", `${12 * bubbleScale}px`);
-  document.documentElement.style.setProperty("--bubble-top", `${6 * bubbleScale}px`);
-  document.documentElement.style.setProperty("--bubble-padding-y", `${8 * bubbleScale}px`);
-  document.documentElement.style.setProperty("--bubble-padding-x", `${10 * bubbleScale}px`);
-  document.documentElement.style.setProperty("--bubble-font-size", `${13 * bubbleScale}px`);
-  document.documentElement.style.setProperty("--bubble-min-height", `${38 * bubbleScale}px`);
 }
 
 function getAtlasScale() {
@@ -159,7 +139,6 @@ function setPetState(payload) {
   }
 
   setAnimationState(payload?.normalizedState || payload?.state || "idle");
-  showMessage(payload?.message || "");
 }
 
 async function startDrag(event) {

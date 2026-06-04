@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, Tray, ipcMain, nativeImage } = require("electron");
+const { app, BrowserWindow, Menu, Tray, ipcMain, nativeImage, screen } = require("electron");
 const fs = require("node:fs");
 const http = require("node:http");
 const os = require("node:os");
@@ -37,6 +37,7 @@ const VALID_STATES = new Set([
 ]);
 
 let win;
+let bubbleWin;
 let settingsWin;
 let tray;
 let server;
@@ -44,6 +45,7 @@ let pets = [];
 let activePet = null;
 let settings = {};
 let stateBeforeDrag = null;
+let bubbleTimer = null;
 let currentState = {
   state: "idle",
   normalizedState: "idle",
@@ -223,6 +225,33 @@ function createWindow() {
   });
 }
 
+function createBubbleWindow() {
+  bubbleWin = new BrowserWindow({
+    width: 280,
+    height: 96,
+    frame: false,
+    transparent: true,
+    resizable: false,
+    movable: false,
+    show: false,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    hasShadow: false,
+    focusable: false,
+    webPreferences: {
+      preload: path.join(__dirname, "preload.js"),
+      contextIsolation: true,
+      nodeIntegration: false
+    }
+  });
+
+  bubbleWin.setAlwaysOnTop(true, "floating");
+  bubbleWin.loadFile(path.join(__dirname, "renderer", "bubble.html"));
+  bubbleWin.on("closed", () => {
+    bubbleWin = null;
+  });
+}
+
 function createSettingsWindow() {
   if (settingsWin && !settingsWin.isDestroyed()) {
     settingsWin.show();
@@ -259,6 +288,54 @@ function sendToWindows(channel, payload) {
   }
 }
 
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function positionBubble(size = {}) {
+  if (!win || win.isDestroyed() || !bubbleWin || bubbleWin.isDestroyed()) return;
+
+  const petBounds = win.getBounds();
+  const display = screen.getDisplayMatching(petBounds);
+  const area = display.workArea;
+  const gap = 10;
+  const margin = 8;
+  const width = Math.ceil(Number(size.width) || 280);
+  const height = Math.ceil(Number(size.height) || 96);
+  const petCenterX = petBounds.x + petBounds.width / 2;
+  const topY = petBounds.y - height - gap;
+  const bottomY = petBounds.y + petBounds.height + gap;
+
+  const x = clamp(
+    Math.round(petCenterX - width / 2),
+    area.x + margin,
+    area.x + area.width - width - margin
+  );
+  const y = topY >= area.y + margin
+    ? topY
+    : clamp(bottomY, area.y + margin, area.y + area.height - height - margin);
+
+  bubbleWin.setBounds({ x, y, width, height });
+}
+
+function showBubble(message) {
+  if (!bubbleWin || bubbleWin.isDestroyed()) return;
+  clearTimeout(bubbleTimer);
+
+  if (!message) {
+    bubbleWin.hide();
+    return;
+  }
+
+  bubbleWin.webContents.send("bubble:set-message", {
+    message,
+    bubbleScale: clampBubbleScale(settings.bubbleScale || 1)
+  });
+  bubbleTimer = setTimeout(() => {
+    if (bubbleWin && !bubbleWin.isDestroyed()) bubbleWin.hide();
+  }, 4200);
+}
+
 function broadcastZoom() {
   sendToWindows("pet:set-zoom", {
     zoom: clampZoom(settings.zoom || 1),
@@ -270,6 +347,9 @@ function broadcastBubbleScale() {
   sendToWindows("pet:set-bubble-scale", {
     bubbleScale: clampBubbleScale(settings.bubbleScale || 1)
   });
+  if (currentState.message) {
+    showBubble(currentState.message);
+  }
 }
 
 function broadcastState(nextState) {
@@ -288,6 +368,7 @@ function broadcastState(nextState) {
     actions: ACTIONS,
     activePet: toPetPayload(activePet)
   });
+  showBubble(currentState.message);
 }
 
 function broadcastPet() {
@@ -343,6 +424,7 @@ function resizePetWindow(zoomInput) {
   settings.windowBounds = win.getBounds();
   saveSettings();
   broadcastZoom();
+  positionBubble();
   return { ok: true, zoom, bounds: win.getBounds() };
 }
 
@@ -352,6 +434,23 @@ function resizeBubble(scaleInput) {
   saveSettings();
   broadcastBubbleScale();
   return { ok: true, bubbleScale };
+}
+
+function getWindowPlacement() {
+  if (!win || win.isDestroyed()) return null;
+  const bounds = win.getBounds();
+  const display = screen.getDisplayMatching(bounds);
+  const workArea = display.workArea;
+  const edgeMargin = 48;
+
+  return {
+    bounds,
+    workArea,
+    nearLeft: bounds.x <= workArea.x + edgeMargin,
+    nearRight: bounds.x + bounds.width >= workArea.x + workArea.width - edgeMargin,
+    nearTop: bounds.y <= workArea.y + edgeMargin,
+    nearBottom: bounds.y + bounds.height >= workArea.y + workArea.height - edgeMargin
+  };
 }
 
 function parseJsonBody(req) {
@@ -560,6 +659,7 @@ app.whenReady().then(() => {
   loadSettings();
   discoverPets();
   createWindow();
+  createBubbleWindow();
   createTray();
   createApiServer();
 
@@ -590,12 +690,14 @@ app.whenReady().then(() => {
     if (!win || win.isDestroyed()) return null;
     return win.getBounds();
   });
+  ipcMain.handle("pet:get-window-placement", () => getWindowPlacement());
   ipcMain.handle("pet:move-window", (_event, point) => {
     if (!win || win.isDestroyed() || !point) return false;
     const x = Math.round(Number(point.x));
     const y = Math.round(Number(point.y));
     if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
     win.setPosition(x, y);
+    positionBubble();
     return true;
   });
   ipcMain.handle("pet:resize-window", (_event, payload) => {
@@ -603,6 +705,13 @@ app.whenReady().then(() => {
   });
   ipcMain.handle("pet:resize-bubble", (_event, payload) => {
     return resizeBubble(payload?.bubbleScale || payload?.scale);
+  });
+  ipcMain.handle("bubble:measure", (_event, size) => {
+    positionBubble(size);
+    if (bubbleWin && !bubbleWin.isDestroyed() && currentState.message) {
+      bubbleWin.showInactive();
+    }
+    return true;
   });
   ipcMain.handle("pet:finish-drag", () => {
     if (win && !win.isDestroyed()) {

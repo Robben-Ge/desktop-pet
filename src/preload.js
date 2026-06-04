@@ -6,9 +6,11 @@ contextBridge.exposeInMainWorld("desktopPet", {
   selectPet: (payload) => ipcRenderer.invoke("pet:select-pet", payload),
   setState: (payload) => ipcRenderer.invoke("pet:set-state", payload),
   getWindowBounds: () => ipcRenderer.invoke("pet:get-window-bounds"),
+  getWindowPlacement: () => ipcRenderer.invoke("pet:get-window-placement"),
   moveWindow: (point) => ipcRenderer.invoke("pet:move-window", point),
   resizeWindow: (payload) => ipcRenderer.invoke("pet:resize-window", payload),
   resizeBubble: (payload) => ipcRenderer.invoke("pet:resize-bubble", payload),
+  measureBubble: (payload) => ipcRenderer.invoke("bubble:measure", payload),
   finishDrag: () => ipcRenderer.invoke("pet:finish-drag"),
   setDragDirection: (state) => ipcRenderer.send("pet:drag-direction", state),
   openSettings: () => ipcRenderer.send("pet:open-settings"),
@@ -31,5 +33,10 @@ contextBridge.exposeInMainWorld("desktopPet", {
     const listener = (_event, payload) => callback(payload);
     ipcRenderer.on("pet:set-bubble-scale", listener);
     return () => ipcRenderer.removeListener("pet:set-bubble-scale", listener);
+  },
+  onBubbleMessage: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on("bubble:set-message", listener);
+    return () => ipcRenderer.removeListener("bubble:set-message", listener);
   }
 });

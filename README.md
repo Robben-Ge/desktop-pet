@@ -79,6 +79,7 @@ thinking -> review
 idle 状态下鼠标移入宠物 -> 显示固定尺寸缩放手柄
 拖动右下角缩放手柄 -> 放大/缩小宠物
 非 idle 状态 -> 隐藏缩放手柄
+消息气泡 -> 独立透明窗口，自动避让屏幕边缘
 ```
 
 ## 设置页
@@ -95,6 +96,8 @@ idle 状态下鼠标移入宠物 -> 显示固定尺寸缩放手柄
 ```
 
 选择的宠物、桌面窗口位置、宠物缩放比例和气泡大小会保存到 Electron 的 userData 设置文件。气泡大小独立于宠物缩放。
+
+气泡使用独立的 `BubbleWindow`，不再塞在宠物窗口内部。显示消息时会根据宠物窗口所在屏幕的 `workArea` 自动计算位置：优先显示在宠物上方，顶部空间不够时翻到下方，左右超出时 clamp 回屏幕内部。
 
 ## API
 
@@ -168,6 +171,9 @@ src/preload.js               安全 IPC 桥接
 src/renderer/index.html      透明桌面宠物窗口
 src/renderer/renderer.js     Codex spritesheet 播放器和拖拽动作
 src/renderer/styles.css      桌面宠物窗口样式
+src/renderer/bubble.html     独立消息气泡窗口
+src/renderer/bubble.js       气泡测量和消息渲染
+src/renderer/bubble.css      气泡样式
 src/renderer/settings.html   设置页
 src/renderer/settings.js     设置页逻辑
 src/renderer/settings.css    设置页样式
