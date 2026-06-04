@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Desktop Pet Agent</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="stage" aria-live="polite">
+      <div id="bubble" class="bubble">Ready</div>
+      <section id="pet" class="pet" aria-label="Desktop pet">
+        <div id="sprite" class="sprite"></div>
+        <div id="fallback" class="fallback">
+          <div class="bot-head">
+            <span></span>
+            <span></span>
+          </div>
+          <div class="bot-body"></div>
+        </div>
+      </section>
+      <button id="resizeHandle" class="resize-handle" type="button" aria-label="缩放桌面宠物">
+        <img class="resize-icon" src="./resize-handle.svg" alt="" aria-hidden="true" />
+      </button>
+    </main>
+    <script src="./renderer.js"></script>
+  </body>
+</html>

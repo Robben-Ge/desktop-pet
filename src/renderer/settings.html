@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Desktop Pet Settings</title>
+    <link rel="stylesheet" href="./settings.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <h1>桌面宠物设置</h1>
+          <p id="apiInfo">Loading...</p>
+        </div>
+        <button id="refreshBtn" type="button">刷新</button>
+      </header>
+
+      <section class="section">
+        <div class="section-title">
+          <h2>宠物包</h2>
+          <span id="petCount">0</span>
+        </div>
+        <div id="petList" class="pet-list"></div>
+      </section>
+
+      <section class="section">
+        <div class="section-title">
+          <h2>动作测试</h2>
+          <span>Codex 固定 9 行</span>
+        </div>
+        <div id="actionGrid" class="action-grid"></div>
+      </section>
+
+      <section class="section">
+        <div class="section-title">
+          <h2>尺寸</h2>
+          <span id="zoomInfo">100%</span>
+        </div>
+        <div class="size-grid">
+          <button type="button" data-zoom="0.75">75%</button>
+          <button type="button" data-zoom="1">100%</button>
+          <button type="button" data-zoom="1.25">125%</button>
+          <button type="button" data-zoom="1.5">150%</button>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-title">
+          <h2>目录</h2>
+        </div>
+        <dl class="paths">
+          <div>
+            <dt>pets</dt>
+            <dd id="petsRoot"></dd>
+          </div>
+          <div>
+            <dt>pet-runs</dt>
+            <dd id="petRunsRoot"></dd>
+          </div>
+          <div>
+            <dt>settings</dt>
+            <dd id="settingsPath"></dd>
+          </div>
+        </dl>
+      </section>
+    </main>
+    <script src="./settings.js"></script>
+  </body>
+</html>

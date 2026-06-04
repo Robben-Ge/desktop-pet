@@ -1,0 +1,20 @@
+{
+  "name": "desktop-pet-agent",
+  "version": "0.1.0",
+  "description": "Standalone desktop pet with a local state API for future agent hooks.",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron ."
+  },
+  "keywords": [
+    "desktop-pet",
+    "agent-hooks",
+    "electron"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "28.2.9"
+  }
+}
