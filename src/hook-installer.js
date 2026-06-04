@@ -12,6 +12,7 @@ const AGENT_CONFIGS = {
     label: "Claude Code",
     settingsPath: () => path.join(os.homedir(), ".claude", "settings.json"),
     format: "claude",
+    useArgs: true,
     source: "claude-code",
     events: ["UserPromptSubmit", "PreToolUse", "PermissionRequest", "Notification", "Stop", "StopFailure"]
   },
@@ -99,20 +100,34 @@ function shellQuote(value) {
   return `"${value}"`;
 }
 
-function buildBridgeCommand(agent, event, options = {}) {
+function buildBridgeCommandParts(agent, event, options = {}) {
   const nodeBin = options.nodeBin || resolveNodeBin();
   const bridgePath = path.join(__dirname, "hook-bridge.js");
   const apiBase = options.apiBase || API_BASE;
+  return {
+    nodeBin,
+    bridgePath,
+    args: [
+      bridgePath,
+      "--source",
+      agent.source,
+      "--event",
+      event,
+      "--api",
+      apiBase,
+      MARKER
+    ]
+  };
+}
+
+function buildBridgeCommand(agent, event, options = {}) {
+  const parts = buildBridgeCommandParts(agent, event, options);
   return [
-    shellQuote(nodeBin),
-    shellQuote(bridgePath),
-    "--source",
-    agent.source,
-    "--event",
-    event,
-    "--api",
-    apiBase,
-    MARKER
+    shellQuote(parts.nodeBin),
+    ...parts.args.map((arg) => {
+      if (arg === "--source" || arg === "--event" || arg === "--api" || arg === MARKER) return arg;
+      return shellQuote(arg);
+    })
   ].join(" ");
 }
 
@@ -154,6 +169,10 @@ function managedHookUsesNode(value) {
       return /(?:^|[\\/"'\s])node(?:\.exe)?(?:["'\s]|$)/i.test(command) && !/electron(?:\.exe)?/i.test(command);
     }
   }
+  if (typeof value.command === "string" && hasManagedArgs(value)) {
+    const base = path.basename(value.command).toLowerCase();
+    return (base === "node.exe" || base === "node") && !/electron(?:\.exe)?/i.test(value.command);
+  }
   if (Array.isArray(value.hooks)) return value.hooks.every(managedHookUsesNode);
   return true;
 }
@@ -162,8 +181,28 @@ function containsManagedHook(value) {
   if (!value || typeof value !== "object") return false;
   if (typeof value.command === "string" && value.command.includes(MARKER)) return true;
   if (typeof value.commandWindows === "string" && value.commandWindows.includes(MARKER)) return true;
+  if (hasManagedArgs(value)) return true;
   if (Array.isArray(value.hooks)) return value.hooks.some(containsManagedHook);
   return false;
+}
+
+function hasManagedArgs(value) {
+  return Array.isArray(value?.args) && value.args.some((arg) => String(arg).includes(MARKER));
+}
+
+function managedHookUsesArgs(value) {
+  if (!value || typeof value !== "object") return false;
+  if (hasManagedArgs(value)) return true;
+  if (typeof value.command === "string" && value.command.includes(MARKER)) return false;
+  if (typeof value.commandWindows === "string" && value.commandWindows.includes(MARKER)) return false;
+  if (Array.isArray(value.hooks)) return value.hooks.some(managedHookUsesArgs);
+  return false;
+}
+
+function managedHookMatchesAgent(agent, value) {
+  if (!containsManagedHook(value) || !managedHookUsesNode(value)) return false;
+  if (agent.useArgs) return managedHookUsesArgs(value);
+  return true;
 }
 
 function removeManagedHooks(settings) {
@@ -191,7 +230,22 @@ function removeManagedHooks(settings) {
   };
 }
 
-function createClaudeHookEntry(command) {
+function createClaudeHookEntry(agent, event, options = {}) {
+  if (agent.useArgs) {
+    const parts = buildBridgeCommandParts(agent, event, options);
+    return {
+      hooks: [{
+        type: "command",
+        command: parts.nodeBin,
+        args: parts.args,
+        timeout: 3,
+        async: true,
+        asyncRewake: false
+      }]
+    };
+  }
+
+  const command = buildBridgeCommand(agent, event, options);
   return {
     hooks: [{
       type: "command",
@@ -240,7 +294,7 @@ function installHooks(agentId, options = {}) {
     const command = buildBridgeCommand(agent, event, options);
     const entry = agent.format === "codex"
       ? createCodexHookEntry(command, event)
-      : createClaudeHookEntry(command);
+      : createClaudeHookEntry(agent, event, options);
     hooks[event] = Array.isArray(hooks[event]) ? [...hooks[event], entry] : [entry];
     added += 1;
   }
@@ -309,7 +363,7 @@ function doctorHooks(agentId, options = {}) {
   const hooks = settings.hooks && typeof settings.hooks === "object" ? settings.hooks : {};
   const missing = agent.events.filter((event) => {
     const entries = hooks[event];
-    return !Array.isArray(entries) || !entries.some((entry) => containsManagedHook(entry) && managedHookUsesNode(entry));
+    return !Array.isArray(entries) || !entries.some((entry) => managedHookMatchesAgent(agent, entry));
   });
   const invalidCommands = countInvalidManagedCommands(hooks);
   const codexFeature = agent.format === "codex" ? getCodexHooksFeature(agent, options) : null;
