@@ -731,10 +731,21 @@ app.whenReady().then(() => {
   ipcMain.handle("pet:set-state", (_event, payload) => {
     const state = String(payload?.state || "idle");
     if (!VALID_STATES.has(state)) return { ok: false, error: "Invalid state" };
+    const durationMs = Number.isFinite(Number(payload?.durationMs)) ? Number(payload.durationMs) : 0;
     broadcastState({
       state,
       message: typeof payload?.message === "string" ? payload.message.slice(0, 120) : ""
     });
+    if (durationMs > 0) {
+      const returnState = typeof payload?.returnState === "string" && VALID_STATES.has(payload.returnState)
+        ? payload.returnState
+        : "idle";
+      setTimeout(() => {
+        if (currentState.state === state) {
+          broadcastState({ state: returnState, message: "" });
+        }
+      }, Math.min(durationMs, 60_000));
+    }
     return { ok: true, state: currentState };
   });
   ipcMain.handle("pet:get-window-bounds", () => {

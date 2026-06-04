@@ -43,6 +43,7 @@ let zoom = 1;
 let resizeStart = null;
 let hideResizeTimer = null;
 let bubbleScale = 1;
+let clickCandidate = null;
 
 function normalizeState(state) {
   const requested = state || "idle";
@@ -155,6 +156,11 @@ async function startDrag(event) {
     windowX: bounds.x,
     windowY: bounds.y
   };
+  clickCandidate = {
+    screenX: event.screenX,
+    screenY: event.screenY,
+    startedAt: Date.now()
+  };
   lastDragDirection = null;
   pet.setPointerCapture(event.pointerId);
 }
@@ -181,8 +187,24 @@ function moveDrag(event) {
 
 function endDrag(event) {
   if (!dragStart || event.pointerId !== dragStart.pointerId) return;
+  const movedX = Math.abs(event.screenX - dragStart.startScreenX);
+  const movedY = Math.abs(event.screenY - dragStart.startScreenY);
+  const elapsed = clickCandidate ? Date.now() - clickCandidate.startedAt : Infinity;
+  const isClick = movedX <= 4 && movedY <= 4 && elapsed <= 500;
   dragStart = null;
   lastDragDirection = null;
+  clickCandidate = null;
+
+  if (isClick) {
+    window.desktopPet.setState({
+      state: "jumping",
+      message: "",
+      durationMs: 900,
+      returnState: currentState
+    });
+    return;
+  }
+
   window.desktopPet.finishDrag();
 }
 
