@@ -14,7 +14,7 @@ const DEFAULT_REMINDER_TYPES = [
     label: "喝水",
     mode: "interval",
     enabled: true,
-    intervalMinutes: 45,
+    intervalMinutes: 60,
     message: "该喝水啦！已经 {minutes} 分钟没喝水了 💧",
     animationState: "waving",
     durationSeconds: 15
@@ -315,6 +315,7 @@ class ReminderManager {
     if (this.#timer) return;
     this.#tick(); // first tick immediately to align state
     this.#timer = setInterval(() => this.#tick(), POLL_INTERVAL_MS);
+    if (typeof this.#timer.unref === "function") this.#timer.unref();
   }
 
   stop() {
@@ -393,11 +394,12 @@ class ReminderManager {
     runtime.lastTriggeredAt = Date.now();
 
     // Auto-return to waiting after cooldown
-    setTimeout(() => {
+    const cooldownTimer = setTimeout(() => {
       if (runtime.state === State.COOLDOWN) {
         runtime.state = State.WAITING;
       }
     }, COOLDOWN_MS);
+    if (typeof cooldownTimer.unref === "function") cooldownTimer.unref();
   }
 
   #formatMessage(type) {
