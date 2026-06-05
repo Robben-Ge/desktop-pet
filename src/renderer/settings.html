@@ -117,11 +117,22 @@
               <span class="eyebrow">当前工作区</span>
               <h2>宠物库</h2>
               <p>从当前目录加载 Codex 兼容宠物。目录里需要包含 `pet.json` 和 `spritesheet.webp`。</p>
+              <div class="pet-library-controls">
+                <div id="petSourceTabs" class="pet-source-tabs" role="tablist" aria-label="宠物来源">
+                  <button type="button" data-pet-source="pets" role="tab" aria-selected="true">目录</button>
+                  <button type="button" data-pet-source="builtin" role="tab" aria-selected="false">内置</button>
+                </div>
+                <button id="reloadPetsBtn" class="reload-pets-button" type="button">重新加载目录</button>
+              </div>
             </div>
             <div class="hero-count">
               <strong id="petCount">0</strong>
-              <span>只宠物</span>
+              <span id="petCountLabel">只宠物</span>
             </div>
+          </section>
+
+          <section class="panel pet-library-panel">
+            <div id="petList" class="pet-list"></div>
           </section>
 
           <section class="panel update-panel" id="updatePanel">
@@ -147,10 +158,6 @@
               <button id="installUpdateBtn" type="button" hidden>重启安装</button>
               <button id="openReleasesBtn" type="button">打开 Releases</button>
             </div>
-          </section>
-
-          <section class="panel">
-            <div id="petList" class="pet-list"></div>
           </section>
 
           <section class="panel">

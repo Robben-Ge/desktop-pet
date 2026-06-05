@@ -3,7 +3,10 @@ const refreshBtn = document.getElementById("refreshBtn");
 const storageTabs = document.getElementById("storageTabs");
 const chooseCustomBtn = document.getElementById("chooseCustomBtn");
 const petCount = document.getElementById("petCount");
+const petCountLabel = document.getElementById("petCountLabel");
 const petList = document.getElementById("petList");
+const petSourceTabs = document.getElementById("petSourceTabs");
+const reloadPetsBtn = document.getElementById("reloadPetsBtn");
 const actionGrid = document.getElementById("actionGrid");
 const hookSummary = document.getElementById("hookSummary");
 const hookList = document.getElementById("hookList");
@@ -32,6 +35,8 @@ let activeHookAgent = "codex";
 let currentStorage = "codex";
 let currentCustomPetsRoot = "";
 let currentUpdateStatus = "idle";
+let allPets = [];
+let activePetSource = "pets";
 
 const UPDATE_STATUS_LABELS = {
   idle: "尚未检查",
@@ -165,6 +170,30 @@ function renderUpdateStatus(update) {
   installUpdateBtn.hidden = status !== "ready";
 }
 
+function getPetSourceLabel(source) {
+  return source === "builtin" ? "内置" : "目录";
+}
+
+function getVisiblePets() {
+  return allPets.filter((pet) => (pet.source || "pets") === activePetSource);
+}
+
+function renderPetSourceTabs() {
+  const counts = allPets.reduce((result, pet) => {
+    const source = pet.source || "pets";
+    result[source] = (result[source] || 0) + 1;
+    return result;
+  }, { builtin: 0, pets: 0 });
+
+  petSourceTabs.querySelectorAll("[data-pet-source]").forEach((button) => {
+    const source = button.dataset.petSource;
+    const active = source === activePetSource;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-selected", active ? "true" : "false");
+    button.textContent = `${getPetSourceLabel(source)} ${counts[source] || 0}`;
+  });
+}
+
 async function selectHookAgent(hook) {
   if (!hook.agent) return;
   try {
@@ -208,20 +237,25 @@ async function installHook(hook) {
 }
 
 function renderPets(pets) {
-  const list = Array.isArray(pets) ? pets : [];
+  allPets = Array.isArray(pets) ? pets : [];
+  const list = getVisiblePets();
+  renderPetSourceTabs();
   petCount.textContent = String(list.length);
+  petCountLabel.textContent = `${getPetSourceLabel(activePetSource)}宠物`;
   petList.innerHTML = "";
 
   if (list.length === 0) {
     const empty = document.createElement("p");
     empty.className = "empty-note";
-    empty.textContent = "当前目录还没有可用宠物。请从上方渠道下载宠物包，解压后放入当前目录，或切换到自定义宠物文件夹。";
+    empty.textContent = activePetSource === "pets"
+      ? "当前目录还没有可用宠物。请从左侧渠道下载宠物包，解压后放入当前目录，再点击“重新加载目录”。"
+      : "暂未找到内置宠物。";
     petList.appendChild(empty);
     return;
   }
 
   for (const pet of list) {
-    const sourceLabel = pet.sourceLabel || (pet.source === "builtin" ? "内置" : "目录");
+    const sourceLabel = pet.sourceLabel || getPetSourceLabel(pet.source);
     const item = document.createElement("article");
     item.className = `pet-item${pet.key === activePetKey ? " active" : ""}`;
     item.innerHTML = `
@@ -240,6 +274,7 @@ function renderPets(pets) {
       const result = await window.desktopPet.selectPet({ key: pet.key });
       if (result.ok) {
         activePetKey = result.activePet?.key || "";
+        activePetSource = result.activePet?.source || activePetSource;
         renderPets(result.pets);
       }
     });
@@ -263,15 +298,21 @@ function renderStorage(storage) {
   });
 }
 
-async function applyPetResult(result) {
+async function applyPetResult(result, options = {}) {
   if (result.storage) renderStorage(result.storage);
-  if (result.activePet) activePetKey = result.activePet.key || "";
+  if (result.activePet) {
+    activePetKey = result.activePet.key || "";
+    activePetSource = options.petSource || result.activePet.source || activePetSource;
+  } else if (options.petSource) {
+    activePetSource = options.petSource;
+  }
   if (Array.isArray(result.pets)) renderPets(result.pets);
 }
 
 async function loadSettings() {
   const initial = await window.desktopPet.getInitialState();
   activePetKey = initial.activePet?.key || "";
+  activePetSource = initial.activePet?.source || "pets";
   zoom = Number(initial.config?.zoom) || 1;
   bubbleScale = Number(initial.config?.bubbleScale) || 1;
   activeHookAgent = initial.config?.activeHookAgent || "codex";
@@ -311,6 +352,27 @@ window.desktopPet.onBubbleScaleChange((payload) => {
 window.desktopPet.onUpdateStatus((payload) => renderUpdateStatus(payload));
 
 refreshBtn.addEventListener("click", loadSettings);
+
+petSourceTabs.querySelectorAll("[data-pet-source]").forEach((button) => {
+  button.addEventListener("click", () => {
+    activePetSource = button.dataset.petSource || "pets";
+    renderPets(allPets);
+  });
+});
+
+reloadPetsBtn.addEventListener("click", async () => {
+  reloadPetsBtn.disabled = true;
+  reloadPetsBtn.textContent = "加载中...";
+  try {
+    const result = await window.desktopPet.listPets();
+    applyPetResult(result, { petSource: "pets" });
+  } catch (error) {
+    window.alert(error.message || "重新加载目录失败");
+  } finally {
+    reloadPetsBtn.disabled = false;
+    reloadPetsBtn.textContent = "重新加载目录";
+  }
+});
 
 checkUpdateBtn.addEventListener("click", async () => {
   renderUpdateStatus({
