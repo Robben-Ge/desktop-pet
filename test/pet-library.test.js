@@ -15,14 +15,15 @@ function tempDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), "desktop-pet-test-"));
 }
 
-function writePet(root, id) {
+function writePet(root, id, extras = {}) {
   const dir = path.join(root, id);
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(path.join(dir, "spritesheet.webp"), WEBP);
   fs.writeFileSync(path.join(dir, "pet.json"), JSON.stringify({
     id,
     displayName: `Pet ${id}`,
-    spritesheetPath: "spritesheet.webp"
+    spritesheetPath: "spritesheet.webp",
+    ...extras
   }));
 }
 
@@ -91,6 +92,26 @@ test("getActivePetsRoot falls back to .codex when custom folder is missing", () 
 
   assert.equal(storage.petStorage, "codex");
   assert.equal(storage.petsRoot, path.join(codexHome, "pets"));
+});
+
+test("discoverPets defaults to sprite version 2", () => {
+  const root = tempDir();
+  const petsRoot = path.join(root, "pets");
+  writePet(petsRoot, "v2-pet");
+
+  const pets = discoverPets(petsRoot);
+  assert.equal(pets[0].spriteVersionNumber, 2);
+  assert.equal(pets[0].atlasRows, 11);
+});
+
+test("discoverPets keeps sprite version 1 atlas rows", () => {
+  const root = tempDir();
+  const petsRoot = path.join(root, "pets");
+  writePet(petsRoot, "v1-pet", { spriteVersionNumber: 1 });
+
+  const pets = discoverPets(petsRoot);
+  assert.equal(pets[0].spriteVersionNumber, 1);
+  assert.equal(pets[0].atlasRows, 9);
 });
 
 test("sanitizeId keeps ids filesystem-safe", () => {

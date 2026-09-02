@@ -1,5 +1,8 @@
 node_modules/
 dist/
 out/
+.tools/
+app.asar
+build*.log
 app.log
 *.tmp

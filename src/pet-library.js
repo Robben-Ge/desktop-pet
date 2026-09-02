@@ -70,6 +70,16 @@ function getActivePetsRoot({ codexHome, settings = {} }) {
   };
 }
 
+function normalizeSpriteVersion(value) {
+  const version = Number(value);
+  if (version === 1) return 1;
+  return 2;
+}
+
+function atlasRowsForVersion(spriteVersionNumber) {
+  return normalizeSpriteVersion(spriteVersionNumber) === 1 ? 9 : 11;
+}
+
 function discoverPetsInDirectory(petsRoot, source = "pets") {
   const prefix = source === "builtin" ? "builtin" : "pets";
   return listDirectories(petsRoot)
@@ -77,6 +87,7 @@ function discoverPetsInDirectory(petsRoot, source = "pets") {
       const manifest = readJson(path.join(dir, "pet.json")) || {};
       const id = String(manifest.id || path.basename(dir));
       const spritesheetPath = path.resolve(dir, manifest.spritesheetPath || "spritesheet.webp");
+      const spriteVersionNumber = normalizeSpriteVersion(manifest.spriteVersionNumber);
 
       if (!fs.existsSync(spritesheetPath)) return null;
 
@@ -85,6 +96,8 @@ function discoverPetsInDirectory(petsRoot, source = "pets") {
         key: `${prefix}:${id}`,
         displayName: String(manifest.displayName || id),
         description: String(manifest.description || ""),
+        spriteVersionNumber,
+        atlasRows: atlasRowsForVersion(spriteVersionNumber),
         source,
         sourceLabel: PET_SOURCE_LABELS[source] || source,
         root: dir,
@@ -106,11 +119,14 @@ function discoverPets(petsRoot, options = {}) {
 
 function toPetPayload(pet) {
   if (!pet) return null;
+  const spriteVersionNumber = normalizeSpriteVersion(pet.spriteVersionNumber);
   return {
     id: pet.id,
     key: pet.key,
     displayName: pet.displayName,
     description: pet.description,
+    spriteVersionNumber,
+    atlasRows: pet.atlasRows || atlasRowsForVersion(spriteVersionNumber),
     source: pet.source,
     sourceLabel: pet.sourceLabel,
     root: pet.root,
@@ -120,8 +136,10 @@ function toPetPayload(pet) {
 }
 
 module.exports = {
+  atlasRowsForVersion,
   discoverPets,
   getActivePetsRoot,
+  normalizeSpriteVersion,
   sanitizeId,
   toPetPayload
 };

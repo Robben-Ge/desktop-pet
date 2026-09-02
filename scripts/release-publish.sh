@@ -42,4 +42,4 @@ git push origin "${TAG}"
 
 echo
 echo "Release workflow triggered:"
-echo "https://github.com/yangbuyiya/desktop-pet/actions"
+echo "https://github.com/Robben-Ge/desktop-pet/actions"

@@ -1,6 +1,6 @@
-appId: com.yby6.desktop-pet
-productName: Desktop Pet Agent
-copyright: Copyright © 2026 yangbuyiya
+appId: com.robbenge.our-pets
+productName: Our Pets
+copyright: Copyright © 2026 Robben-Ge
 icon: src/assets/logo.png
 
 directories:
@@ -21,7 +21,7 @@ files:
 asar: true
 
 win:
-  executableName: Desktop Pet Agent
+  executableName: OurPets
   target:
     - target: nsis
       arch:
@@ -33,9 +33,9 @@ nsis:
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: always
   createStartMenuShortcut: true
-  shortcutName: Desktop Pet Agent
-  uninstallDisplayName: Desktop Pet Agent
-  artifactName: Desktop-Pet-Agent-${version}-${platform}-${arch}.${ext}
+  shortcutName: Our Pets
+  uninstallDisplayName: Our Pets
+  artifactName: Our-Pets-${version}-${platform}-${arch}.${ext}
 
 mac:
   category: public.app-category.developer-tools
@@ -44,7 +44,7 @@ mac:
   target:
     - dmg
     - zip
-  artifactName: Desktop-Pet-Agent-${version}-${platform}-${arch}.${ext}
+  artifactName: Our-Pets-${version}-${platform}-${arch}.${ext}
   hardenedRuntime: false
   gatekeeperAssess: false
   notarize: false
@@ -53,13 +53,13 @@ npmRebuild: false
 
 publish:
   provider: github
-  owner: yangbuyiya
+  owner: Robben-Ge
   repo: desktop-pet
 
 releaseInfo:
   releaseNotes: |
-    ## Desktop Pet Agent 发布版本
+    ## Our Pets 发布版本
 
     - 发布 Windows x64 安装包
     - 发布 macOS universal 安装包
-    - 接入 GitHub Releases 自动更新
+    - 从 GitHub Releases 读取自动更新

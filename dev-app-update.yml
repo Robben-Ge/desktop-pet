@@ -1,4 +1,4 @@
 provider: github
-owner: yangbuyiya
+owner: Robben-Ge
 repo: desktop-pet
-updaterCacheDirName: desktop-pet-agent-updater
+updaterCacheDirName: our-pets-updater

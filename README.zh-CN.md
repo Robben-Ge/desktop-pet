@@ -1,18 +1,18 @@
-# Desktop Pet Agent
+# Our Pets
 
 <p align="center">
-  <img src="src/assets/logo.png" width="128" height="128" alt="Desktop Pet Agent logo" />
+  <img src="src/assets/logo.png" width="128" height="128" alt="Our Pets logo" />
 </p>
 
 <p align="center">
-  一个独立的 Electron 桌面宠物运行时，支持 Codex 兼容宠物和真实 Agent hooks。
+  私人定制桌面宠物应用，内置多角色，托盘切换，支持 V2 精灵图。
 </p>
 
 <p align="center">
   <a href="README.md">English README</a>
 </p>
 
-Desktop Pet Agent 会在桌面上显示一个可拖拽、置顶的小宠物，播放 Codex 兼容精灵图，显示自动避边的消息气泡，并响应 Codex、Claude Code、CodeBuddy 的真实生命周期 hook。
+> 基于 [yangbuyiya/desktop-pet](https://github.com/yangbuyiya/desktop-pet) fork 改造。原项目 MIT 许可证见 [LICENSE](./LICENSE)。
 
 ## 功能
 
@@ -49,7 +49,7 @@ npm run build:unpack
 
 ## 发布与自动更新
 
-项目使用 GitHub Actions 和 `electron-builder` 发布版本。推送 `v*` tag 后会构建 Windows x64 与 macOS universal 安装包，并上传到 [GitHub Releases](https://github.com/yangbuyiya/desktop-pet/releases)。自动更新同样从该 Release 读取 `latest.yml` 和 `latest-mac.yml`。
+项目使用 GitHub Actions 和 `electron-builder` 发布版本。推送 `v*` tag 后会构建 Windows x64 与 macOS universal 安装包，并上传到 [GitHub Releases](https://github.com/Robben-Ge/desktop-pet/releases)。自动更新同样从该 Release 读取 `latest.yml` 和 `latest-mac.yml`。
 
 发布新版本：
 

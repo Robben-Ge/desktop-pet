@@ -6,11 +6,14 @@ const resizeHandle = document.getElementById("resizeHandle");
 
 const CELL_WIDTH = 192;
 const CELL_HEIGHT = 208;
+const ATLAS_COLS = 8;
+const DEFAULT_ATLAS_ROWS = 11; // Codex Pet V2
 const BASE_SPRITE_SCALE = 0.86;
 const BASE_WINDOW_WIDTH = 240;
 const BASE_WINDOW_HEIGHT = 286;
 let minZoom = 0.65;
 let maxZoom = 2.4;
+let atlasRows = DEFAULT_ATLAS_ROWS;
 
 const ROWS = {
   idle: { row: 0, durations: [280, 110, 110, 140, 140, 320] },
@@ -77,11 +80,19 @@ function getAtlasScale() {
   return BASE_SPRITE_SCALE * zoom;
 }
 
+function resolveAtlasRows(petPayload) {
+  const rows = Number(petPayload?.atlasRows);
+  if (rows === 9 || rows === 11) return rows;
+  const version = Number(petPayload?.spriteVersionNumber);
+  return version === 1 ? 9 : DEFAULT_ATLAS_ROWS;
+}
+
 function updateSpriteMetrics() {
   const atlasScale = getAtlasScale();
   sprite.style.width = `${CELL_WIDTH * atlasScale}px`;
   sprite.style.height = `${CELL_HEIGHT * atlasScale}px`;
-  sprite.style.backgroundSize = `${CELL_WIDTH * 8 * atlasScale}px ${CELL_HEIGHT * 9 * atlasScale}px`;
+  sprite.style.backgroundSize =
+    `${CELL_WIDTH * ATLAS_COLS * atlasScale}px ${CELL_HEIGHT * atlasRows * atlasScale}px`;
 }
 
 function drawFrame() {
@@ -120,6 +131,7 @@ function setAnimationState(state) {
 
 function setPet(petPayload) {
   currentPet = petPayload || null;
+  atlasRows = resolveAtlasRows(currentPet);
 
   if (!currentPet?.spritesheetUrl) {
     sprite.classList.remove("ready");
@@ -131,7 +143,7 @@ function setPet(petPayload) {
   updateSpriteMetrics();
   sprite.classList.add("ready");
   fallback.classList.remove("show");
-  drawFrame();
+  setAnimationState("idle");
 }
 
 function setPetState(payload) {

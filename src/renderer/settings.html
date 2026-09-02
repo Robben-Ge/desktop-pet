@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Desktop Pet Agent Settings</title>
+    <title>Our Pets 设置</title>
     <link rel="icon" type="image/png" href="../assets/logo.png" />
     <link rel="stylesheet" href="./settings.css" />
   </head>
@@ -13,8 +13,8 @@
         <div class="brand-lockup">
           <img src="../assets/logo.png" alt="" aria-hidden="true" />
           <div>
-            <h1>桌面宠物设置</h1>
-            <p id="apiInfo">Loading...</p>
+            <h1>Our Pets 设置</h1>
+            <p id="apiInfo">切换角色、调整大小</p>
           </div>
         </div>
         <button id="refreshBtn" class="icon-command" type="button">刷新</button>
@@ -22,67 +22,6 @@
 
       <div class="settings-layout">
         <aside class="control-rail">
-          <section class="panel storage-panel">
-            <div class="panel-heading">
-              <span class="eyebrow">存储</span>
-              <h2>宠物目录</h2>
-            </div>
-            <div id="storageTabs" class="storage-choice-grid" role="group" aria-label="宠物存储位置">
-              <button type="button" class="storage-option" data-storage="codex" aria-pressed="false">
-                <span class="storage-option-icon">⌂</span>
-                <span class="storage-option-copy">
-                  <strong>.codex 宠物</strong>
-                  <span>默认目录</span>
-                </span>
-                <span class="storage-option-check" aria-hidden="true"></span>
-              </button>
-              <button type="button" class="storage-option" data-storage="custom" aria-pressed="false">
-                <span class="storage-option-icon">⋯</span>
-                <span class="storage-option-copy">
-                  <strong>自定义文件夹</strong>
-                  <span>本地目录</span>
-                </span>
-                <span class="storage-option-check" aria-hidden="true"></span>
-              </button>
-            </div>
-            <div class="storage-current">
-              <div class="storage-current-head">
-                <span>当前存储</span>
-                <strong id="storageName">.codex 宠物</strong>
-              </div>
-              <code id="petsRoot"></code>
-              <div class="storage-actions">
-                <button type="button" class="storage-action primary" data-open-folder="current">打开当前</button>
-                <button type="button" class="storage-action" data-open-folder="codex">打开 .codex</button>
-                <button type="button" class="storage-action" id="chooseCustomBtn">选择自定义</button>
-              </div>
-            </div>
-            <dl class="paths storage-paths">
-              <div>
-                <dt>.codex</dt>
-                <dd id="codexPetsRoot"></dd>
-              </div>
-              <div>
-                <dt>自定义</dt>
-                <dd id="customPetsRoot"></dd>
-              </div>
-            </dl>
-          </section>
-
-          <section class="panel sources-panel">
-            <div class="panel-heading">
-              <span class="eyebrow">渠道</span>
-              <h2>获取宠物</h2>
-              <p>从下列站点下载宠物包，解压后放入当前目录即可。</p>
-            </div>
-            <div class="source-grid" aria-label="宠物获取渠道">
-              <a href="https://petdex.crafter.run/zh" target="_blank" rel="noreferrer">Petdex</a>
-              <a href="https://codex-pets.net/" target="_blank" rel="noreferrer">Codex Pets</a>
-              <a href="https://spriteyard.com/" target="_blank" rel="noreferrer">SpriteYard</a>
-              <a href="https://www.codexpetshop.com/" target="_blank" rel="noreferrer">Pet Shop</a>
-            </div>
-          </section>
-
           <section class="panel tuning-panel">
             <div class="panel-heading">
               <span class="eyebrow">外观</span>
@@ -109,20 +48,33 @@
               <button type="button" data-bubble-scale="1.4">140</button>
             </div>
           </section>
+
+          <section class="panel storage-panel">
+            <div class="panel-heading">
+              <span class="eyebrow">高级</span>
+              <h2>自定义宠物</h2>
+              <p>把宠物文件夹放到自定义目录后，点重新加载即可。</p>
+            </div>
+            <div class="storage-actions">
+              <button type="button" class="storage-action primary" id="chooseCustomBtn">选择文件夹</button>
+              <button type="button" class="storage-action" data-open-folder="custom">打开文件夹</button>
+            </div>
+            <code id="customPetsRoot"></code>
+          </section>
         </aside>
 
         <section class="content-stack">
           <section class="panel hero-panel">
             <div class="hero-copy">
-              <span class="eyebrow">当前工作区</span>
-              <h2>宠物库</h2>
-              <p>从当前目录加载 Codex 兼容宠物。目录里需要包含 `pet.json` 和 `spritesheet.webp`。</p>
+              <span class="eyebrow">角色</span>
+              <h2>内置宠物</h2>
+              <p>安装后即可使用。托盘菜单也可以快速切换角色。</p>
               <div class="pet-library-controls">
                 <div id="petSourceTabs" class="pet-source-tabs" role="tablist" aria-label="宠物来源">
-                  <button type="button" data-pet-source="pets" role="tab" aria-selected="true">目录</button>
-                  <button type="button" data-pet-source="builtin" role="tab" aria-selected="false">内置</button>
+                  <button type="button" data-pet-source="builtin" role="tab" aria-selected="true">内置</button>
+                  <button type="button" data-pet-source="pets" role="tab" aria-selected="false">自定义</button>
                 </div>
-                <button id="reloadPetsBtn" class="reload-pets-button" type="button">重新加载目录</button>
+                <button id="reloadPetsBtn" class="reload-pets-button" type="button">重新加载</button>
               </div>
             </div>
             <div class="hero-count">
@@ -133,6 +85,17 @@
 
           <section class="panel pet-library-panel">
             <div id="petList" class="pet-list"></div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-title-row">
+              <div>
+                <span class="eyebrow">调试</span>
+                <h2>动作测试</h2>
+              </div>
+              <span class="summary-pill">V2 · 9 行动画</span>
+            </div>
+            <div id="actionGrid" class="action-grid"></div>
           </section>
 
           <section class="panel update-panel" id="updatePanel">
@@ -158,28 +121,6 @@
               <button id="installUpdateBtn" type="button" hidden>重启安装</button>
               <button id="openReleasesBtn" type="button">打开 Releases</button>
             </div>
-          </section>
-
-          <section class="panel">
-            <div class="panel-title-row">
-              <div>
-                <span class="eyebrow">Agent</span>
-                <h2>Hook 状态</h2>
-              </div>
-              <span id="hookSummary" class="summary-pill">Checking...</span>
-            </div>
-            <div id="hookList" class="hook-list"></div>
-          </section>
-
-          <section class="panel">
-            <div class="panel-title-row">
-              <div>
-                <span class="eyebrow">调试</span>
-                <h2>动作测试</h2>
-              </div>
-              <span class="summary-pill">Codex 固定 9 行</span>
-            </div>
-            <div id="actionGrid" class="action-grid"></div>
           </section>
 
           <section class="panel">
@@ -233,7 +174,6 @@
         </section>
       </div>
     </main>
-    <!-- Lightweight modal for prompt/confirm -->
     <div id="customModal" class="custom-modal" style="display:none;">
       <div class="custom-modal-box">
         <p id="customModalText"></p>

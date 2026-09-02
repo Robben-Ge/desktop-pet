@@ -36,7 +36,7 @@ let currentStorage = "codex";
 let currentCustomPetsRoot = "";
 let currentUpdateStatus = "idle";
 let allPets = [];
-let activePetSource = "pets";
+let activePetSource = "builtin";
 
 const UPDATE_STATUS_LABELS = {
   idle: "尚未检查",
@@ -57,6 +57,7 @@ function createTextElement(tag, className, text) {
 }
 
 function renderActions(actions) {
+  if (!actionGrid) return;
   actionGrid.innerHTML = "";
   for (const action of actions) {
     const button = document.createElement("button");
@@ -80,6 +81,7 @@ function renderActions(actions) {
 }
 
 function renderHookStatus(hooks) {
+  if (!hookList || !hookSummary) return;
   const list = Array.isArray(hooks) ? hooks : [];
   const okCount = list.filter((hook) => hook.state === "ok").length;
   const selected = list.find((hook) => hook.selected);
@@ -171,7 +173,7 @@ function renderUpdateStatus(update) {
 }
 
 function getPetSourceLabel(source) {
-  return source === "builtin" ? "内置" : "目录";
+  return source === "builtin" ? "内置" : "自定义";
 }
 
 function getVisiblePets() {
@@ -248,7 +250,7 @@ function renderPets(pets) {
     const empty = document.createElement("p");
     empty.className = "empty-note";
     empty.textContent = activePetSource === "pets"
-      ? "当前目录还没有可用宠物。请从左侧渠道下载宠物包，解压后放入当前目录，再点击“重新加载目录”。"
+      ? "自定义目录还没有宠物。请选择文件夹，放入 pet.json 和 spritesheet.webp，再点重新加载。"
       : "暂未找到内置宠物。";
     petList.appendChild(empty);
     return;
@@ -286,11 +288,16 @@ function renderStorage(storage) {
   if (!storage) return;
   currentStorage = storage.petStorage || "codex";
   currentCustomPetsRoot = storage.customPetsRoot || "";
-  storageName.textContent = currentStorage === "custom" ? "自定义文件夹" : ".codex 宠物";
-  petsRoot.textContent = storage.petsRoot || "";
-  codexPetsRoot.textContent = storage.codexPetsRoot || "";
-  customPetsRoot.textContent = storage.customPetsRoot || "未设置";
+  if (storageName) {
+    storageName.textContent = currentStorage === "custom" ? "自定义文件夹" : ".codex 宠物";
+  }
+  if (petsRoot) petsRoot.textContent = storage.petsRoot || "";
+  if (codexPetsRoot) codexPetsRoot.textContent = storage.codexPetsRoot || "";
+  if (customPetsRoot) {
+    customPetsRoot.textContent = storage.customPetsRoot || "未设置";
+  }
 
+  if (!storageTabs) return;
   storageTabs.querySelectorAll("[data-storage]").forEach((button) => {
     const active = button.dataset.storage === currentStorage;
     button.classList.toggle("active", active);
@@ -312,14 +319,12 @@ async function applyPetResult(result, options = {}) {
 async function loadSettings() {
   const initial = await window.desktopPet.getInitialState();
   activePetKey = initial.activePet?.key || "";
-  activePetSource = initial.activePet?.source || "pets";
+  activePetSource = initial.activePet?.source || "builtin";
   zoom = Number(initial.config?.zoom) || 1;
   bubbleScale = Number(initial.config?.bubbleScale) || 1;
-  activeHookAgent = initial.config?.activeHookAgent || "codex";
   renderUpdateStatus(initial.config?.updateStatus || { version: initial.config?.appVersion });
   zoomInfo.textContent = `${Math.round(zoom * 100)}%`;
   bubbleInfo.textContent = `${Math.round(bubbleScale * 100)}%`;
-  apiInfo.textContent = initial.config?.apiBaseUrl || "";
   settingsPath.textContent = initial.config?.settingsPath || "";
   renderStorage({
     petStorage: initial.config?.petStorage,
@@ -329,9 +334,12 @@ async function loadSettings() {
   });
   renderPets(initial.pets || []);
   renderActions(initial.actions || []);
-  renderHookStatus(initial.config?.hookStatus || []);
+  if (initial.config?.agentFeaturesEnabled) {
+    activeHookAgent = initial.config?.activeHookAgent || "codex";
+    renderHookStatus(initial.config?.hookStatus || []);
+    window.desktopPet.getHookStatus().then((result) => renderHookStatus(result.hooks || []));
+  }
   renderReminders(initial.config?.reminderStatus);
-  window.desktopPet.getHookStatus().then((result) => renderHookStatus(result.hooks || []));
   window.desktopPet.getUpdateStatus().then((result) => renderUpdateStatus(result.update));
   window.desktopPet.getReminders().then((result) => { if (result.ok) renderReminders(result.reminders); });
 }
@@ -394,7 +402,7 @@ openReleasesBtn.addEventListener("click", () => {
   window.desktopPet.openReleases();
 });
 
-storageTabs.querySelectorAll("[data-storage]").forEach((button) => {
+storageTabs?.querySelectorAll("[data-storage]").forEach((button) => {
   button.addEventListener("click", async () => {
     if (button.dataset.storage === "custom" && !currentCustomPetsRoot) {
       const chosen = await window.desktopPet.chooseCustomPetStorage();

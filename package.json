@@ -1,7 +1,7 @@
 {
-  "name": "desktop-pet",
+  "name": "our-pets",
   "version": "0.1.1",
-  "description": "Standalone desktop pet with a local state API for future agent hooks.",
+  "description": "Private desktop pet app with built-in characters.",
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",
@@ -19,18 +19,18 @@
   },
   "keywords": [
     "desktop-pet",
-    "agent-hooks",
-    "electron"
+    "electron",
+    "our-pets"
   ],
-  "author": "yangbuyiya",
+  "author": "Robben-Ge",
   "repository": {
     "type": "git",
-    "url": "git+ssh://git@github.com/yangbuyiya/desktop-pet.git"
+    "url": "git+https://github.com/Robben-Ge/desktop-pet.git"
   },
   "bugs": {
-    "url": "https://github.com/yangbuyiya/desktop-pet/issues"
+    "url": "https://github.com/Robben-Ge/desktop-pet/issues"
   },
-  "homepage": "https://github.com/yangbuyiya/desktop-pet#readme",
+  "homepage": "https://github.com/Robben-Ge/desktop-pet#readme",
   "license": "MIT",
   "devDependencies": {
     "electron": "28.2.9",

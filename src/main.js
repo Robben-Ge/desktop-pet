@@ -19,7 +19,9 @@ const API_PORT = Number(process.env.PET_PORT || 17861);
 const CODEX_HOME = process.env.CODEX_HOME || path.join(os.homedir(), ".codex");
 const LOGO_PATH = path.join(__dirname, "assets", "logo.png");
 const BUNDLED_PETS_ROOT = path.join(__dirname, "assets", "pets");
-const RELEASES_URL = "https://github.com/yangbuyiya/desktop-pet/releases";
+const DEFAULT_PET_ID = "gradie";
+const AGENT_FEATURES_ENABLED = false;
+const RELEASES_URL = "https://github.com/Robben-Ge/desktop-pet/releases";
 const BASE_WINDOW_WIDTH = 240;
 const BASE_WINDOW_HEIGHT = 286;
 const MIN_ZOOM = 0.65;
@@ -170,7 +172,12 @@ function discoverPets() {
   const storage = getPetStorageInfo();
   pets = discoverPetsInRoot(storage.petsRoot, { bundledPetsRoot: BUNDLED_PETS_ROOT });
   const preferred = process.env.PET_ID || settings.activePetKey;
-  activePet = pets.find((pet) => pet.id === preferred || pet.key === preferred) || pets[0] || null;
+  const defaultId = settings.defaultPetId || DEFAULT_PET_ID;
+  activePet =
+    pets.find((pet) => pet.id === preferred || pet.key === preferred) ||
+    pets.find((pet) => pet.id === defaultId || pet.key === `builtin:${defaultId}`) ||
+    pets[0] ||
+    null;
 }
 
 function getPetStorageInfo() {
@@ -711,11 +718,13 @@ function selectPet(idOrKey, source) {
     return pet.id === idOrKey || pet.key === idOrKey;
   });
 
-  if (!nextPet) return false;
+  if (!nextPet || nextPet.key === activePet?.key) return Boolean(nextPet);
   activePet = nextPet;
   settings.activePetKey = nextPet.key;
   saveSettings();
   broadcastPet();
+  broadcastState({ state: "idle", message: "Ready" });
+  rebuildTrayMenu();
   return true;
 }
 
@@ -774,7 +783,8 @@ function buildInitialPayload() {
     actions: ACTIONS,
     activePet: toPetPayload(activePet),
     config: {
-      apiBaseUrl: `http://${API_HOST}:${API_PORT}`,
+      agentFeaturesEnabled: AGENT_FEATURES_ENABLED,
+      apiBaseUrl: AGENT_FEATURES_ENABLED ? `http://${API_HOST}:${API_PORT}` : "",
       petsRoot: storage.petsRoot,
       petStorage: storage.petStorage,
       petStorageOptions: storage.options,
@@ -782,9 +792,9 @@ function buildInitialPayload() {
       customPetsRoot: storage.customPetsRoot,
       bundledPetsRoot: BUNDLED_PETS_ROOT,
       settingsPath: getSettingsPath(),
-      agents: AGENTS,
-      hookStatus: getHookStatus(),
-      activeHookAgent: getActiveHookAgent(),
+      agents: AGENT_FEATURES_ENABLED ? AGENTS : {},
+      hookStatus: AGENT_FEATURES_ENABLED ? getHookStatus() : [],
+      activeHookAgent: AGENT_FEATURES_ENABLED ? getActiveHookAgent() : "",
       zoom: clampZoom(settings.zoom || 1),
       minZoom: MIN_ZOOM,
       maxZoom: MAX_ZOOM,
@@ -802,6 +812,7 @@ function buildInitialPayload() {
 }
 
 function getHookStatus() {
+  if (!AGENT_FEATURES_ENABLED) return [];
   const lastByAgent = getLastHookEventByAgent();
   return Object.keys(AGENT_CONFIGS).map((agentId) => {
     const result = doctorHooks(agentId);
@@ -1319,16 +1330,26 @@ function createApiServer() {
 }
 
 function buildTrayMenu() {
+  const petItems = pets.map((pet) => ({
+    label: pet.displayName,
+    type: "radio",
+    checked: pet.key === activePet?.key,
+    click: () => selectPet(pet.key)
+  }));
+
   return Menu.buildFromTemplate([
     {
-      label: "Show / Hide",
+      label: "显示 / 隐藏",
       click: () => {
         if (!win) return;
         win.isVisible() ? win.hide() : win.show();
       }
     },
+    ...(petItems.length
+      ? [{ label: "切换角色", submenu: petItems }, { type: "separator" }]
+      : []),
     {
-      label: "Settings",
+      label: "设置",
       click: () => createSettingsWindow()
     },
     {
@@ -1341,30 +1362,9 @@ function buildTrayMenu() {
         saveSettings();
       }
     },
+    { type: "separator" },
     {
-      type: "separator"
-    },
-    {
-      label: "Check for Updates",
-      click: () => checkForUpdates(true)
-    },
-    {
-      type: "separator"
-    },
-    {
-      label: "Idle",
-      click: () => broadcastState({ state: "idle", message: "Ready" })
-    },
-    {
-      label: "Running",
-      click: () => broadcastState({ state: "running", message: "Task running" })
-    },
-    {
-      label: "Waiting",
-      click: () => broadcastState({ state: "waiting", message: "Waiting for input" })
-    },
-    {
-      label: "Quit",
+      label: "退出",
       click: () => app.quit()
     }
   ]);
@@ -1378,7 +1378,7 @@ function rebuildTrayMenu() {
 function createTray() {
   const icon = createAppIcon().resize({ width: 16, height: 16 });
   tray = new Tray(icon);
-  tray.setToolTip("Desktop Pet Agent");
+  tray.setToolTip("Our Pets");
   tray.setContextMenu(buildTrayMenu());
 }
 
@@ -1389,16 +1389,16 @@ function configureMacMenuBarMode() {
 }
 
 app.whenReady().then(() => {
-  app.setName("Desktop Pet Agent");
+  app.setName("Our Pets");
   configureMacMenuBarMode();
-  if (process.platform === "win32") app.setAppUserModelId("com.desktop-pet-agent.app");
+  if (process.platform === "win32") app.setAppUserModelId("com.robbenge.our-pets");
   loadSettings();
   discoverPets();
   setupAutoUpdater();
   createWindow();
   createBubbleWindow();
   createTray();
-  createApiServer();
+  if (AGENT_FEATURES_ENABLED) createApiServer();
 
   reminderManager = new ReminderManager({
     reminders: settings.reminders,
