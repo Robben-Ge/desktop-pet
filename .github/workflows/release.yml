@@ -59,6 +59,11 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set -euxo pipefail
+          echo "Creating/updating release for $TAG_NAME on $RELEASE_REPO"
+          git rev-parse HEAD
+          git ls-remote --tags origin "refs/tags/$TAG_NAME" || true
+
           if gh release view "$TAG_NAME" --repo "$RELEASE_REPO" >/dev/null 2>&1; then
             gh release edit "$TAG_NAME" \
               --repo "$RELEASE_REPO" \
@@ -66,9 +71,10 @@ jobs:
               --notes-file release-notes.md \
               --latest
           else
+            # Avoid --verify-tag: flaky right after tag recreate on forks.
             gh release create "$TAG_NAME" \
               --repo "$RELEASE_REPO" \
-              --verify-tag \
+              --target "$GITHUB_SHA" \
               --title "$TAG_NAME" \
               --notes-file release-notes.md \
               --latest
