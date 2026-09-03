@@ -43,7 +43,6 @@ mac:
     LSUIElement: true
   target:
     - zip
-    - dmg
   artifactName: Our-Pets-${version}-${platform}-${arch}.${ext}
   hardenedRuntime: false
   gatekeeperAssess: false
@@ -61,5 +60,5 @@ releaseInfo:
     ## Our Pets 发布版本
 
     - 发布 Windows x64 安装包
-    - 发布 macOS universal 安装包
+    - 发布 macOS zip 安装包
     - 从 GitHub Releases 读取自动更新

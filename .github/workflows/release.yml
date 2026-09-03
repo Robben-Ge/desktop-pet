@@ -141,19 +141,16 @@ jobs:
       - name: Test
         run: npm test
 
-      - name: Install DMG tooling
-        run: npm install dmg-license@1.0.11 --no-save --include=optional --registry=https://registry.npmjs.org/
-
-      - name: Build macOS package
+      - name: Build macOS zip package
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
         run: |
-          set -euxo pipefail
-          npx electron-builder --mac --universal --publish never \
-            -c.mac.identity=null \
-            -c.mac.notarize=false \
-            -l info
+          set -eux
+          npx electron-builder --mac zip --publish never \
+            -c.mac.identity=- \
+            -c.mac.notarize=false
           ls -lah dist
+          find dist -maxdepth 1 -type f -print
 
       - name: Upload macOS release assets
         env:
@@ -167,7 +164,7 @@ jobs:
           fi
 
           assets=()
-          for pattern in dist/*.dmg dist/*.dmg.blockmap dist/*.zip dist/*.zip.blockmap dist/latest-mac.yml; do
+          for pattern in dist/*.zip dist/*.zip.blockmap dist/latest-mac.yml; do
             for asset in $pattern; do
               if [ -f "$asset" ]; then
                 assets+=("$asset")
