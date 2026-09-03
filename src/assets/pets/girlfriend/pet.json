@@ -1,7 +1,7 @@
 {
-  "id": "girlfriend",
-  "displayName": "长裙小女友",
-  "description": "A refined chibi Codex pet based on the provided girlfriend reference, with round glasses, dark braided hair, and a cream dress.",
+  "id": "danna-dress",
+  "displayName": "Danna · 长裙",
+  "description": "深棕编发，圆框眼镜，奶油色长裙，日常温柔版的 Danna。",
   "spriteVersionNumber": 2,
   "spritesheetPath": "spritesheet.webp"
 }
