@@ -9,7 +9,7 @@
     "build": "npm test && electron-builder --dir",
     "build:unpack": "electron-builder --dir",
     "build:win": "electron-builder --win --publish never",
-    "build:mac": "electron-builder --mac --publish never",
+    "build:mac": "electron-builder --mac --universal --publish never",
     "release:version": "npm version patch --no-git-tag-version",
     "test": "node --test",
     "hooks:doctor": "node src/hook-installer.js doctor",

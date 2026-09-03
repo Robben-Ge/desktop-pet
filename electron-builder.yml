@@ -41,10 +41,9 @@ mac:
   category: public.app-category.utilities
   extendInfo:
     LSUIElement: true
-  identity: null
   target:
-    - dmg
     - zip
+    - dmg
   artifactName: Our-Pets-${version}-${platform}-${arch}.${ext}
   hardenedRuntime: false
   gatekeeperAssess: false
@@ -62,5 +61,5 @@ releaseInfo:
     ## Our Pets 发布版本
 
     - 发布 Windows x64 安装包
-    - 发布 macOS arm64 安装包（Apple Silicon）
+    - 发布 macOS universal 安装包
     - 从 GitHub Releases 读取自动更新

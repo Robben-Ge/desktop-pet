@@ -149,7 +149,10 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: false
         run: |
           set -euxo pipefail
-          npx electron-builder --mac --publish never -l info
+          npx electron-builder --mac --universal --publish never \
+            -c.mac.identity=null \
+            -c.mac.notarize=false \
+            -l info
           ls -lah dist
 
       - name: Upload macOS release assets
