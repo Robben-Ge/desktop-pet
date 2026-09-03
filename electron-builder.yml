@@ -38,9 +38,10 @@ nsis:
   artifactName: Our-Pets-${version}-${platform}-${arch}.${ext}
 
 mac:
-  category: public.app-category.developer-tools
+  category: public.app-category.utilities
   extendInfo:
     LSUIElement: true
+  identity: "-"
   target:
     - dmg
     - zip

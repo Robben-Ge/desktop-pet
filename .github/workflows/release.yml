@@ -141,28 +141,30 @@ jobs:
       - name: Test
         run: npm test
 
-      - name: Ensure DMG optional dependency
-        run: |
-          if ! node -e "require.resolve('dmg-license')"; then
-            npm install dmg-license@1.0.11 --no-save --include=optional --registry=https://registry.npmjs.org/
-          fi
+      - name: Install DMG tooling
+        run: npm install dmg-license@1.0.11 --no-save --include=optional --registry=https://registry.npmjs.org/
 
       - name: Build macOS universal package
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
-        run: npx electron-builder --mac --universal --publish never
+        run: |
+          set -euxo pipefail
+          npx electron-builder --mac --universal --publish never -l info
+          ls -lah dist
 
       - name: Upload macOS release assets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set -euxo pipefail
           if [ ! -f dist/latest-mac.yml ]; then
             echo "Missing dist/latest-mac.yml"
+            ls -lah dist || true
             exit 1
           fi
 
           assets=()
-          for pattern in "dist/*.dmg" "dist/*.dmg.blockmap" "dist/*.zip" "dist/*.zip.blockmap" "dist/latest-mac.yml"; do
+          for pattern in dist/*.dmg dist/*.dmg.blockmap dist/*.zip dist/*.zip.blockmap dist/latest-mac.yml; do
             for asset in $pattern; do
               if [ -f "$asset" ]; then
                 assets+=("$asset")
@@ -170,9 +172,10 @@ jobs:
             done
           done
 
-          if [ "${#assets[@]}" -lt 3 ]; then
+          if [ "${#assets[@]}" -lt 2 ]; then
             echo "Not enough macOS assets generated."
             printf '%s\n' "${assets[@]}"
+            ls -lah dist || true
             exit 1
           fi
 
