@@ -1,26 +1,18 @@
 const { app, BrowserWindow, Menu, Tray, ipcMain, nativeImage, screen, shell, dialog } = require("electron");
 const { autoUpdater } = require("electron-updater");
 const fs = require("node:fs");
-const http = require("node:http");
-const os = require("node:os");
 const path = require("node:path");
-const { AGENTS, buildDecision } = require("./agent-events");
-const { AGENT_CONFIGS, doctorHooks, installHooks } = require("./hook-installer");
 const {
   discoverPets: discoverPetsInRoot,
   getActivePetsRoot,
   toPetPayload
 } = require("./pet-library");
-const { SessionManager } = require("./session-manager");
 const { ReminderManager } = require("./reminder-manager");
+const { DailyGreetingManager } = require("./daily-greeting");
 
-const API_HOST = "127.0.0.1";
-const API_PORT = Number(process.env.PET_PORT || 17861);
-const CODEX_HOME = process.env.CODEX_HOME || path.join(os.homedir(), ".codex");
 const LOGO_PATH = path.join(__dirname, "assets", "logo.png");
 const BUNDLED_PETS_ROOT = path.join(__dirname, "assets", "pets");
 const DEFAULT_PET_ID = "danna-graduation";
-const AGENT_FEATURES_ENABLED = false;
 const RELEASES_URL = "https://github.com/Robben-Ge/desktop-pet/releases";
 const BASE_WINDOW_WIDTH = 240;
 const BASE_WINDOW_HEIGHT = 286;
@@ -28,10 +20,6 @@ const MIN_ZOOM = 0.65;
 const MAX_ZOOM = 2.4;
 const MIN_BUBBLE_SCALE = 0.75;
 const MAX_BUBBLE_SCALE = 1.6;
-const MAX_BUBBLE_ITEMS = 3;
-const MAX_RECENT_HOOK_EVENTS = 40;
-const DEFAULT_ACTIVE_HOOK_AGENT = "codex";
-const REVIEW_AFTER_RUNNING_DEBOUNCE_MS = 1400;
 
 const VALID_STATES = new Set([
   "idle",
@@ -56,15 +44,11 @@ let win;
 let bubbleWin;
 let settingsWin;
 let tray;
-let server;
 let pets = [];
 let activePet = null;
 let settings = {};
 let stateBeforeDrag = null;
 let bubbleTimer = null;
-let agentReturnTimer = null;
-let agentReviewDebounceTimer = null;
-let pendingReviewDecision = null;
 let bubbleReady = false;
 let pendingBubblePayload = null;
 let updateCheckInProgress = false;
@@ -74,6 +58,7 @@ let updateInstallStarted = false;
 let updatePromptVisible = false;
 let pendingUpdateInfo = null;
 let reminderManager = null;
+let dailyGreetingManager = null;
 let updateStatus = {
   status: "idle",
   message: "尚未检查更新",
@@ -82,25 +67,23 @@ let updateStatus = {
   releaseUrl: RELEASES_URL,
   updatedAt: new Date().toISOString()
 };
-const agentSessions = new SessionManager();
-let recentHookEvents = [];
 let currentState = {
   state: "idle",
   normalizedState: "idle",
-  message: "Ready",
+  message: "",
   updatedAt: new Date().toISOString()
 };
 
 const ACTIONS = [
-  { state: "idle", label: "idle 待机", row: 0, hookName: "idle" },
-  { state: "running-right", label: "向右拖拽移动", row: 1, hookName: "drag-right" },
-  { state: "running-left", label: "向左拖拽移动", row: 2, hookName: "drag-left" },
-  { state: "waving", label: "挥手/提醒", row: 3, hookName: "remind" },
-  { state: "jumping", label: "done 开心跳一下", row: 4, hookName: "done" },
-  { state: "failed", label: "sleeping 趴下睡觉", row: 5, hookName: "sleeping" },
-  { state: "waiting", label: "waiting 等待输入", row: 6, hookName: "waiting" },
-  { state: "running", label: "working 敲代码中", row: 7, hookName: "working" },
-  { state: "review", label: "thinking 歪头思考", row: 8, hookName: "thinking" }
+  { state: "idle", label: "待机", row: 0 },
+  { state: "running-right", label: "向右走", row: 1 },
+  { state: "running-left", label: "向左走", row: 2 },
+  { state: "waving", label: "挥手", row: 3 },
+  { state: "jumping", label: "跳跃", row: 4 },
+  { state: "failed", label: "睡觉", row: 5 },
+  { state: "waiting", label: "等待", row: 6 },
+  { state: "running", label: "忙碌", row: 7 },
+  { state: "review", label: "思考", row: 8 }
 ];
 
 const STATE_ALIASES = {
@@ -168,6 +151,74 @@ function saveSettings() {
   }
 }
 
+function supportsLoginItemSettings() {
+  return process.platform === "win32" || process.platform === "darwin";
+}
+
+function getAutoStartEnabled() {
+  if (supportsLoginItemSettings()) {
+    try {
+      return app.getLoginItemSettings().openAtLogin;
+    } catch {
+      return Boolean(settings.autoStart);
+    }
+  }
+  return Boolean(settings.autoStart);
+}
+
+function setAutoStart(enabled) {
+  const next = Boolean(enabled);
+  settings.autoStart = next;
+  saveSettings();
+
+  if (supportsLoginItemSettings()) {
+    app.setLoginItemSettings({
+      openAtLogin: next,
+      path: process.execPath,
+      args: []
+    });
+  }
+
+  rebuildTrayMenu();
+  return { ok: true, autoStart: getAutoStartEnabled() };
+}
+
+function applyStoredAutoStart() {
+  if (!supportsLoginItemSettings()) return;
+  const want = Boolean(settings.autoStart);
+  try {
+    const current = app.getLoginItemSettings().openAtLogin;
+    if (want !== current) {
+      app.setLoginItemSettings({
+        openAtLogin: want,
+        path: process.execPath,
+        args: []
+      });
+    }
+  } catch (error) {
+    console.warn(`Failed to sync auto-start: ${error.message}`);
+  }
+}
+
+function getLaunchSettingsPayload() {
+  return {
+    autoStart: getAutoStartEnabled(),
+    dailyGreeting: dailyGreetingManager ? dailyGreetingManager.getStatus() : (settings.dailyGreeting || null)
+  };
+}
+
+function showDailyGreeting({ message }) {
+  broadcastState({
+    state: "waving",
+    message,
+    source: "greeting",
+    bubbleDurationMs: 12000
+  });
+  setTimeout(() => {
+    broadcastState({ state: "idle", message: "" });
+  }, 12000);
+}
+
 function discoverPets() {
   const storage = getPetStorageInfo();
   pets = discoverPetsInRoot(storage.petsRoot, { bundledPetsRoot: BUNDLED_PETS_ROOT });
@@ -181,10 +232,7 @@ function discoverPets() {
 }
 
 function getPetStorageInfo() {
-  return getActivePetsRoot({
-    codexHome: CODEX_HOME,
-    settings
-  });
+  return getActivePetsRoot({ settings });
 }
 
 function createWindow() {
@@ -269,7 +317,8 @@ function createSettingsWindow() {
     height: 680,
     minWidth: 760,
     minHeight: 560,
-    title: "Desktop Pet Agent Settings",
+    title: "Our Pets 设置",
+    autoHideMenuBar: true,
     show: false,
     icon: createAppIcon(),
     webPreferences: {
@@ -280,6 +329,7 @@ function createSettingsWindow() {
   });
 
   settingsWin.loadFile(path.join(__dirname, "renderer", "settings.html"));
+  settingsWin.setMenu(null);
   settingsWin.once("ready-to-show", () => settingsWin.show());
   settingsWin.on("closed", () => {
     settingsWin = null;
@@ -348,7 +398,7 @@ function sendUpdateReadyPrompt(info) {
   const options = {
     type: "info",
     title: "更新已下载",
-    message: `Desktop Pet Agent ${info?.version || ""} 已下载完成`,
+    message: `Our Pets ${info?.version || ""} 已下载完成`,
     detail: "重启应用后会安装新版本。",
     buttons: ["重启安装", "稍后"],
     defaultId: 0,
@@ -525,26 +575,13 @@ function positionBubble(size = {}) {
   bubbleWin.setBounds({ x, y, width, height });
 }
 
-function getAgentDisplayName(source) {
-  if (!source) return "";
-  return AGENTS[source]?.label || source;
-}
-
 function buildBubbleItems(state = currentState) {
-  const items = [];
+  if (!state.message) return [];
 
-  if (state.message) {
-    items.push({
-      id: state.sessionId || "current",
-      source: state.source || "",
-      title: getAgentDisplayName(state.source),
-      state: normalizeState(state.state),
-      message: String(state.message).slice(0, 120),
-      persistent: Boolean(state.sessionId && state.source)
-    });
-  }
-
-  return items.slice(0, MAX_BUBBLE_ITEMS);
+  return [{
+    message: String(state.message).slice(0, 500),
+    durationMs: Number.isFinite(Number(state.bubbleDurationMs)) ? Number(state.bubbleDurationMs) : undefined
+  }];
 }
 
 function showBubble(input) {
@@ -577,9 +614,10 @@ function showBubble(input) {
   }
 
   if (!items.some((item) => item.persistent)) {
+    const durationMs = items.find((item) => Number.isFinite(item.durationMs))?.durationMs || 4200;
     bubbleTimer = setTimeout(() => {
       if (bubbleWin && !bubbleWin.isDestroyed()) bubbleWin.hide();
-    }, 4200);
+    }, durationMs);
   }
 }
 
@@ -594,7 +632,7 @@ function broadcastBubbleScale() {
   sendToWindows("pet:set-bubble-scale", {
     bubbleScale: clampBubbleScale(settings.bubbleScale || 1)
   });
-  if (currentState.message || agentSessions.list().some((session) => session.message)) {
+  if (currentState.message) {
     showBubble(buildBubbleItems(currentState));
   }
 }
@@ -618,96 +656,6 @@ function broadcastState(nextState) {
   showBubble(buildBubbleItems(currentState));
 }
 
-function broadcastAgentAggregate() {
-  const aggregate = agentSessions.getAggregate();
-  broadcastState({
-    state: aggregate.state,
-    message: aggregate.message,
-    source: aggregate.source,
-    sessionId: aggregate.sessionId,
-    agentEvent: "aggregate",
-    sessions: agentSessions.list()
-  });
-}
-
-function clearAgentReviewDebounce() {
-  if (agentReviewDebounceTimer) {
-    clearTimeout(agentReviewDebounceTimer);
-    agentReviewDebounceTimer = null;
-  }
-  pendingReviewDecision = null;
-}
-
-function shouldDebounceReviewDecision(decision) {
-  if (!decision || decision.terminal || decision.visualState) return false;
-  if (decision.persistentState !== "review") return false;
-  if (decision.event !== "tool_end" && decision.event !== "review") return false;
-  if (normalizeState(currentState.state) !== "running") return false;
-  if (currentState.source && decision.source && currentState.source !== decision.source) return false;
-  if (currentState.sessionId && decision.sessionId && currentState.sessionId !== decision.sessionId) return false;
-  return true;
-}
-
-function buildDeferredAgentResult(decision) {
-  const aggregate = agentSessions.getAggregate();
-  return {
-    deferred: true,
-    display: {
-      state: currentState.state,
-      message: currentState.message || aggregate.message || "",
-      source: currentState.source || decision.source,
-      sessionId: currentState.sessionId || decision.sessionId,
-      agentEvent: decision.event,
-      durationMs: 0,
-      returnState: aggregate
-    },
-    aggregate,
-    sessions: agentSessions.list()
-  };
-}
-
-function commitAgentDecision(decision) {
-  if (agentReturnTimer) {
-    clearTimeout(agentReturnTimer);
-    agentReturnTimer = null;
-  }
-
-  const result = agentSessions.apply(decision);
-  broadcastState({
-    state: result.display.state,
-    message: result.display.message,
-    source: result.display.source,
-    sessionId: result.display.sessionId,
-    agentEvent: result.display.agentEvent,
-    sessions: result.sessions
-  });
-
-  if (result.display.durationMs > 0) {
-    agentReturnTimer = setTimeout(() => {
-      agentReturnTimer = null;
-      broadcastAgentAggregate();
-    }, result.display.durationMs);
-  }
-
-  return result;
-}
-
-function applyAgentDecision(decision) {
-  if (shouldDebounceReviewDecision(decision)) {
-    clearAgentReviewDebounce();
-    pendingReviewDecision = decision;
-    agentReviewDebounceTimer = setTimeout(() => {
-      const queuedDecision = pendingReviewDecision;
-      clearAgentReviewDebounce();
-      if (queuedDecision) commitAgentDecision(queuedDecision);
-    }, REVIEW_AFTER_RUNNING_DEBOUNCE_MS);
-    return buildDeferredAgentResult(decision);
-  }
-
-  clearAgentReviewDebounce();
-  return commitAgentDecision(decision);
-}
-
 function broadcastPet() {
   sendToWindows("pet:set-pet", toPetPayload(activePet));
 }
@@ -723,20 +671,16 @@ function selectPet(idOrKey, source) {
   settings.activePetKey = nextPet.key;
   saveSettings();
   broadcastPet();
-  broadcastState({ state: "idle", message: "Ready" });
+  broadcastState({ state: "idle", message: "" });
   rebuildTrayMenu();
   return true;
 }
 
-function selectPetStorage(storageId, customDir) {
-  const requested = String(storageId || "codex");
-  if (requested === "custom") {
-    if (!customDir && !settings.customPetsDir) {
-      return { ok: false, error: "请先选择自定义宠物文件夹", storage: getPetStorageInfo() };
-    }
-    if (customDir) settings.customPetsDir = path.resolve(String(customDir));
+function selectPetStorage(_storageId, customDir) {
+  if (!customDir && !settings.customPetsDir) {
+    return { ok: false, error: "请先选择自定义宠物文件夹", storage: getPetStorageInfo() };
   }
-  settings.petStorage = ["codex", "custom"].includes(requested) ? requested : "codex";
+  if (customDir) settings.customPetsDir = path.resolve(String(customDir));
   settings.activePetKey = "";
   saveSettings();
   discoverPets();
@@ -763,8 +707,7 @@ async function chooseCustomPetStorage() {
 async function openPetFolder(kind = "current") {
   const storage = getPetStorageInfo();
   const options = {
-    current: storage.petsRoot,
-    codex: storage.codexPetsRoot,
+    current: storage.petsRoot || storage.customPetsRoot,
     custom: storage.customPetsRoot
   };
   const target = options[kind] || options.current;
@@ -783,18 +726,9 @@ function buildInitialPayload() {
     actions: ACTIONS,
     activePet: toPetPayload(activePet),
     config: {
-      agentFeaturesEnabled: AGENT_FEATURES_ENABLED,
-      apiBaseUrl: AGENT_FEATURES_ENABLED ? `http://${API_HOST}:${API_PORT}` : "",
       petsRoot: storage.petsRoot,
-      petStorage: storage.petStorage,
-      petStorageOptions: storage.options,
-      codexPetsRoot: storage.codexPetsRoot,
       customPetsRoot: storage.customPetsRoot,
       bundledPetsRoot: BUNDLED_PETS_ROOT,
-      settingsPath: getSettingsPath(),
-      agents: AGENT_FEATURES_ENABLED ? AGENTS : {},
-      hookStatus: AGENT_FEATURES_ENABLED ? getHookStatus() : [],
-      activeHookAgent: AGENT_FEATURES_ENABLED ? getActiveHookAgent() : "",
       zoom: clampZoom(settings.zoom || 1),
       minZoom: MIN_ZOOM,
       maxZoom: MAX_ZOOM,
@@ -806,107 +740,9 @@ function buildInitialPayload() {
       appVersion: app.getVersion(),
       releaseUrl: RELEASES_URL,
       updateStatus: getUpdateStatus(),
-      reminderStatus: reminderManager ? reminderManager.getStatus() : null
+      reminderStatus: reminderManager ? reminderManager.getStatus() : null,
+      ...getLaunchSettingsPayload()
     }
-  };
-}
-
-function getHookStatus() {
-  if (!AGENT_FEATURES_ENABLED) return [];
-  const lastByAgent = getLastHookEventByAgent();
-  return Object.keys(AGENT_CONFIGS).map((agentId) => {
-    const result = doctorHooks(agentId);
-    const configuredCount = result.valid
-      ? AGENT_CONFIGS[agentId].events.length - result.missing.length
-      : 0;
-
-    return {
-      ...result,
-      totalEvents: AGENT_CONFIGS[agentId].events.length,
-      configuredCount,
-      lastEvent: lastByAgent[agentId] || null,
-      selected: agentId === getActiveHookAgent(),
-      state: result.status === "installed" ? "ok" : (result.status === "error" ? "error" : "missing"),
-      reason: describeHookStatus(result, configuredCount)
-    };
-  });
-}
-
-function normalizeHookAgent(agentId) {
-  const id = String(agentId || "").toLowerCase();
-  if (AGENT_CONFIGS[id]) return id;
-  return DEFAULT_ACTIVE_HOOK_AGENT;
-}
-
-function getActiveHookAgent() {
-  return normalizeHookAgent(settings.activeHookAgent || DEFAULT_ACTIVE_HOOK_AGENT);
-}
-
-function selectHookAgent(agentId) {
-  const activeHookAgent = normalizeHookAgent(agentId);
-  settings.activeHookAgent = activeHookAgent;
-  saveSettings();
-  agentSessions.clear();
-  clearAgentReviewDebounce();
-  broadcastState({ state: "idle", message: "", source: null, sessionId: null, agentEvent: "select-hook-agent", sessions: [] });
-  return {
-    ok: true,
-    activeHookAgent,
-    hooks: getHookStatus()
-  };
-}
-
-function recordHookEvent(decision) {
-  recentHookEvents = [
-    {
-      source: decision.source,
-      event: decision.event,
-      state: decision.visualState || decision.persistentState || "",
-      sessionId: decision.sessionId,
-      message: decision.message || "",
-      receivedAt: new Date().toISOString()
-    },
-    ...recentHookEvents
-  ].slice(0, MAX_RECENT_HOOK_EVENTS);
-}
-
-function getLastHookEventByAgent() {
-  const out = {};
-  for (const event of recentHookEvents) {
-    if (!event.source || out[event.source]) continue;
-    out[event.source] = event;
-  }
-  return out;
-}
-
-function describeHookStatus(result, configuredCount) {
-  if (result.status === "installed") return "已接入";
-  if (result.status === "error") return result.error || "配置文件无法解析";
-  if (result.invalidCommands > 0) return `有 ${result.invalidCommands} 个 hook 命令不是 Node，需要修复`;
-  if (result.codexFeature && result.codexFeature.enabled !== true) return "Codex hooks feature 未启用";
-  if (!result.exists) return "配置文件不存在，尚未安装 hook";
-  if (configuredCount > 0) return `缺少 ${result.missing.length} 个事件`;
-  return "未发现本项目管理的 hook";
-}
-
-function installHookAgent(agentId) {
-  const id = String(agentId || "").toLowerCase();
-  if (!AGENT_CONFIGS[id]) {
-    return { ok: false, error: `Unknown agent: ${agentId}`, hooks: getHookStatus() };
-  }
-
-  const result = installHooks(id);
-  return {
-    ok: true,
-    result: {
-      agent: result.agent,
-      changed: result.changed,
-      added: result.added,
-      removed: result.removed,
-      backupPath: result.backupPath || null,
-      settingsPath: result.settingsPath
-    },
-    hooks: getHookStatus()
   };
 }
 
@@ -950,385 +786,6 @@ function getWindowPlacement() {
   };
 }
 
-function parseJsonBody(req) {
-  return new Promise((resolve, reject) => {
-    const chunks = [];
-    let byteLength = 0;
-    req.on("data", (chunk) => {
-      chunks.push(chunk);
-      byteLength += chunk.length;
-      if (byteLength > 1024 * 64) {
-        reject(new Error("Request body too large"));
-        req.destroy();
-      }
-    });
-    req.on("end", () => {
-      const buffer = Buffer.concat(chunks);
-      const body = decodeRequestBody(buffer, req.headers["content-type"]);
-      if (!body.trim()) {
-        resolve({});
-        return;
-      }
-      try {
-        resolve(JSON.parse(body));
-      } catch (error) {
-        reject(error);
-      }
-    });
-    req.on("error", reject);
-  });
-}
-
-function decodeRequestBody(buffer, contentType = "") {
-  const charset = String(contentType).match(/charset=([^;]+)/i)?.[1]?.trim().toLowerCase();
-
-  if (charset) {
-    try {
-      return new TextDecoder(charset).decode(buffer);
-    } catch {
-      // Fall through to tolerant defaults.
-    }
-  }
-
-  try {
-    return new TextDecoder("utf-8", { fatal: true }).decode(buffer);
-  } catch {
-    return new TextDecoder("gb18030").decode(buffer);
-  }
-}
-
-function sendJson(res, statusCode, payload) {
-  res.writeHead(statusCode, {
-    "Content-Type": "application/json; charset=utf-8",
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type"
-  });
-  res.end(JSON.stringify(payload));
-}
-
-async function handleApiRequest(req, res) {
-  const url = new URL(req.url, `http://${API_HOST}:${API_PORT}`);
-
-  if (req.method === "OPTIONS") {
-    sendJson(res, 204, {});
-    return;
-  }
-
-  if (url.pathname === "/health") {
-    const storage = getPetStorageInfo();
-    sendJson(res, 200, {
-      ok: true,
-      state: currentState,
-      agentSessions: agentSessions.snapshot(),
-      actions: ACTIONS,
-      activePet: toPetPayload(activePet),
-      petsRoot: storage.petsRoot,
-      petStorage: storage.petStorage
-    });
-    return;
-  }
-
-  if (url.pathname === "/pets" && req.method === "GET") {
-    discoverPets();
-    sendJson(res, 200, {
-      ok: true,
-      actions: ACTIONS,
-      activePet: toPetPayload(activePet),
-      pets: pets.map(toPetPayload),
-      storage: getPetStorageInfo()
-    });
-    return;
-  }
-
-  if (url.pathname === "/pets/storage" && req.method === "POST") {
-    try {
-      const body = await parseJsonBody(req);
-      const result = selectPetStorage(body.storage, body.customDir);
-      sendJson(res, result.ok ? 200 : 400, result);
-    } catch (error) {
-      sendJson(res, 400, { ok: false, error: error.message, storage: getPetStorageInfo() });
-    }
-    return;
-  }
-
-  if (url.pathname === "/actions" && req.method === "GET") {
-    sendJson(res, 200, { ok: true, actions: ACTIONS });
-    return;
-  }
-
-  if (url.pathname === "/hooks/status" && req.method === "GET") {
-    sendJson(res, 200, { ok: true, hooks: getHookStatus() });
-    return;
-  }
-
-  if (url.pathname === "/hooks/install" && req.method === "POST") {
-    try {
-      const body = await parseJsonBody(req);
-      const result = installHookAgent(body.agent);
-      sendJson(res, result.ok ? 200 : 400, result);
-    } catch (error) {
-      sendJson(res, 400, { ok: false, error: error.message, hooks: getHookStatus() });
-    }
-    return;
-  }
-
-  if (url.pathname === "/hooks/select" && req.method === "POST") {
-    try {
-      const body = await parseJsonBody(req);
-      sendJson(res, 200, selectHookAgent(body.agent));
-    } catch (error) {
-      sendJson(res, 400, { ok: false, error: error.message, activeHookAgent: getActiveHookAgent(), hooks: getHookStatus() });
-    }
-    return;
-  }
-
-  if (url.pathname === "/sessions" && req.method === "GET") {
-    sendJson(res, 200, {
-      ok: true,
-      ...agentSessions.snapshot()
-    });
-    return;
-  }
-
-  if (url.pathname === "/sessions/clear" && req.method === "POST") {
-    const snapshot = agentSessions.clear();
-    if (agentReturnTimer) {
-      clearTimeout(agentReturnTimer);
-      agentReturnTimer = null;
-    }
-    clearAgentReviewDebounce();
-    broadcastState({ state: "idle", message: "", source: null, sessionId: null, agentEvent: "clear", sessions: [] });
-    sendJson(res, 200, { ok: true, ...snapshot });
-    return;
-  }
-
-  if (url.pathname === "/settings/open" && req.method === "POST") {
-    createSettingsWindow();
-    sendJson(res, 200, { ok: true });
-    return;
-  }
-
-  if (url.pathname === "/window/resize" && req.method === "POST") {
-    const body = await parseJsonBody(req);
-    sendJson(res, 200, resizePetWindow(body.zoom));
-    return;
-  }
-
-  if (url.pathname === "/bubble/resize" && req.method === "POST") {
-    const body = await parseJsonBody(req);
-    sendJson(res, 200, resizeBubble(body.bubbleScale || body.scale));
-    return;
-  }
-
-  if (url.pathname === "/pet/select" && req.method === "POST") {
-    const body = await parseJsonBody(req);
-    if (!selectPet(String(body.id || body.key || ""), body.source)) {
-      sendJson(res, 404, { ok: false, error: "Pet not found" });
-      return;
-    }
-    sendJson(res, 200, { ok: true, activePet: toPetPayload(activePet) });
-    return;
-  }
-
-  if (url.pathname === "/events" && req.method === "POST") {
-    try {
-      const body = await parseJsonBody(req);
-      const decision = buildDecision(body);
-
-      if (!decision) {
-        sendJson(res, 202, {
-          ok: true,
-          ignored: true,
-          reason: "Unknown or unsupported event",
-          received: {
-            source: body.source || body.agent || body.agentId || null,
-            event: body.event || body.type || body.hook_event_name || body.reaction || null
-          }
-        });
-        return;
-      }
-
-      if (body.petId || body.petKey) {
-        selectPet(String(body.petId || body.petKey), body.petSource);
-      }
-
-      recordHookEvent(decision);
-      if (decision.source !== getActiveHookAgent()) {
-        sendJson(res, 202, {
-          ok: true,
-          ignored: true,
-          reason: `Inactive hook source. Listening to ${getActiveHookAgent()}.`,
-          decision,
-          activeHookAgent: getActiveHookAgent(),
-          hooks: getHookStatus()
-        });
-        return;
-      }
-
-      const result = applyAgentDecision(decision);
-      sendJson(res, 200, {
-        ok: true,
-        decision,
-        display: result.display,
-        aggregate: result.aggregate,
-        sessions: result.sessions,
-        activePet: toPetPayload(activePet)
-      });
-    } catch (error) {
-      sendJson(res, 400, { ok: false, error: error.message });
-    }
-    return;
-  }
-
-  if (url.pathname === "/permission" && req.method === "POST") {
-    try {
-      const body = await parseJsonBody(req);
-      const source = normalizeHookAgent(url.searchParams.get("source") || body.source || "codebuddy");
-      const decision = buildDecision({
-        ...body,
-        source,
-        hook_event_name: body.hook_event_name || body.event || "PermissionRequest"
-      });
-
-      if (decision) {
-        recordHookEvent(decision);
-        if (decision.source === getActiveHookAgent()) {
-          applyAgentDecision(decision);
-        }
-      }
-
-      sendJson(res, 200, {
-        ok: true,
-        decision: "allow",
-        activeHookAgent: getActiveHookAgent()
-      });
-    } catch (error) {
-      sendJson(res, 200, {
-        ok: false,
-        decision: "allow",
-        error: error.message
-      });
-    }
-    return;
-  }
-
-  if (url.pathname === "/state" && req.method === "GET") {
-    sendJson(res, 200, {
-      ...currentState,
-      agentSessions: agentSessions.snapshot(),
-      activePet: toPetPayload(activePet)
-    });
-    return;
-  }
-
-  if (url.pathname === "/state" && req.method === "POST") {
-    try {
-      const body = await parseJsonBody(req);
-      const state = typeof body.state === "string" ? body.state : "idle";
-      const message = typeof body.message === "string" ? body.message.slice(0, 120) : "";
-      const durationMs = Number.isFinite(Number(body.durationMs)) ? Number(body.durationMs) : 0;
-
-      if (body.petId || body.petKey) {
-        selectPet(String(body.petId || body.petKey), body.petSource);
-      }
-
-      if (!VALID_STATES.has(state)) {
-        sendJson(res, 400, {
-          ok: false,
-          error: `Invalid state. Use one of: ${Array.from(VALID_STATES).join(", ")}`
-        });
-        return;
-      }
-
-      broadcastState({ state, message });
-
-      if (durationMs > 0) {
-        setTimeout(() => {
-          if (currentState.state === state) {
-            broadcastState({ state: "idle", message: "Ready" });
-          }
-        }, Math.min(durationMs, 60_000));
-      }
-
-      sendJson(res, 200, {
-        ok: true,
-        state: currentState,
-        activePet: toPetPayload(activePet)
-      });
-    } catch (error) {
-      sendJson(res, 400, { ok: false, error: error.message });
-    }
-    return;
-  }
-
-  // ---- Reminder API ----
-
-  if (url.pathname === "/reminders" && req.method === "GET") {
-    sendJson(res, 200, { ok: true, reminders: reminderManager ? reminderManager.getStatus() : null });
-    return;
-  }
-
-  if (url.pathname === "/reminders/config" && req.method === "POST") {
-    try {
-      const body = await parseJsonBody(req);
-      if (!reminderManager) {
-        sendJson(res, 503, { ok: false, error: "Reminder manager not initialized" });
-        return;
-      }
-      const result = reminderManager.updateConfig(body);
-      sendJson(res, result.ok ? 200 : 400, result);
-    } catch (error) {
-      sendJson(res, 400, { ok: false, error: error.message });
-    }
-    return;
-  }
-
-  if (url.pathname === "/reminders/trigger" && req.method === "POST") {
-    try {
-      const body = await parseJsonBody(req);
-      if (!reminderManager) {
-        sendJson(res, 503, { ok: false, error: "Reminder manager not initialized" });
-        return;
-      }
-      const result = reminderManager.triggerNow(body.typeId || body.id);
-      sendJson(res, result.ok ? 200 : 400, result);
-    } catch (error) {
-      sendJson(res, 400, { ok: false, error: error.message });
-    }
-    return;
-  }
-
-  if (url.pathname === "/reminders/reset" && req.method === "POST") {
-    try {
-      const body = await parseJsonBody(req);
-      if (!reminderManager) {
-        sendJson(res, 503, { ok: false, error: "Reminder manager not initialized" });
-        return;
-      }
-      const result = reminderManager.reset(body.typeId || body.id);
-      sendJson(res, result.ok ? 200 : 400, result);
-    } catch (error) {
-      sendJson(res, 400, { ok: false, error: error.message });
-    }
-    return;
-  }
-
-  sendJson(res, 404, { ok: false, error: "Not found" });
-}
-
-function createApiServer() {
-  server = http.createServer((req, res) => {
-    handleApiRequest(req, res).catch((error) => {
-      sendJson(res, 500, { ok: false, error: error.message });
-    });
-  });
-
-  server.listen(API_PORT, API_HOST, () => {
-    console.log(`Desktop pet API listening on http://${API_HOST}:${API_PORT}`);
-  });
-}
-
 function buildTrayMenu() {
   const petItems = pets.map((pet) => ({
     label: pet.displayName,
@@ -1351,6 +808,20 @@ function buildTrayMenu() {
     {
       label: "设置",
       click: () => createSettingsWindow()
+    },
+    {
+      label: "说一句",
+      click: () => {
+        if (dailyGreetingManager) dailyGreetingManager.sayNow();
+      }
+    },
+    {
+      label: "开机自启动",
+      type: "checkbox",
+      checked: getAutoStartEnabled(),
+      click: (menuItem) => {
+        setAutoStart(menuItem.checked);
+      }
     },
     {
       label: "免打扰模式",
@@ -1390,15 +861,16 @@ function configureMacMenuBarMode() {
 
 app.whenReady().then(() => {
   app.setName("Our Pets");
+  Menu.setApplicationMenu(null);
   configureMacMenuBarMode();
   if (process.platform === "win32") app.setAppUserModelId("com.robbenge.our-pets");
   loadSettings();
+  applyStoredAutoStart();
   discoverPets();
   setupAutoUpdater();
   createWindow();
   createBubbleWindow();
   createTray();
-  if (AGENT_FEATURES_ENABLED) createApiServer();
 
   reminderManager = new ReminderManager({
     reminders: settings.reminders,
@@ -1418,6 +890,19 @@ app.whenReady().then(() => {
   });
   reminderManager.start();
 
+  dailyGreetingManager = new DailyGreetingManager({
+    greeting: settings.dailyGreeting,
+    save: (config) => {
+      settings.dailyGreeting = config;
+      saveSettings();
+    },
+    onGreet: showDailyGreeting
+  });
+  dailyGreetingManager.start();
+  setTimeout(() => {
+    dailyGreetingManager.tryStartupTasks();
+  }, 1800);
+
   ipcMain.handle("pet:get-initial-state", () => buildInitialPayload());
   ipcMain.handle("pet:list-pets", () => {
     discoverPets();
@@ -1428,9 +913,6 @@ app.whenReady().then(() => {
       actions: ACTIONS,
       storage: getPetStorageInfo()
     };
-  });
-  ipcMain.handle("pet:get-hook-status", () => {
-    return { ok: true, hooks: getHookStatus() };
   });
   ipcMain.handle("pet:get-update-status", () => {
     return { ok: true, update: getUpdateStatus() };
@@ -1444,20 +926,6 @@ app.whenReady().then(() => {
   ipcMain.handle("pet:open-releases", async () => {
     await shell.openExternal(RELEASES_URL);
     return { ok: true };
-  });
-  ipcMain.handle("pet:install-hooks", (_event, payload) => {
-    try {
-      return installHookAgent(payload?.agent);
-    } catch (error) {
-      return { ok: false, error: error.message, hooks: getHookStatus() };
-    }
-  });
-  ipcMain.handle("pet:select-hook-agent", (_event, payload) => {
-    try {
-      return selectHookAgent(payload?.agent);
-    } catch (error) {
-      return { ok: false, error: error.message, activeHookAgent: getActiveHookAgent(), hooks: getHookStatus() };
-    }
   });
   ipcMain.handle("pet:select-pet", (_event, payload) => {
     const ok = selectPet(String(payload?.id || payload?.key || ""), payload?.source);
@@ -1569,6 +1037,22 @@ app.whenReady().then(() => {
     if (!reminderManager) return { ok: false, error: "Reminder engine not ready" };
     return reminderManager.reset(payload?.typeId || payload?.id);
   });
+  ipcMain.handle("pet:get-launch-settings", () => {
+    return { ok: true, ...getLaunchSettingsPayload() };
+  });
+  ipcMain.handle("pet:update-launch-settings", (_event, payload) => {
+    if (typeof payload?.autoStart === "boolean") {
+      setAutoStart(payload.autoStart);
+    }
+    if (payload?.dailyGreeting && dailyGreetingManager) {
+      dailyGreetingManager.updateConfig(payload.dailyGreeting);
+    }
+    return { ok: true, ...getLaunchSettingsPayload() };
+  });
+  ipcMain.handle("pet:trigger-greeting-now", () => {
+    if (!dailyGreetingManager) return { ok: false, error: "问候功能未就绪" };
+    return dailyGreetingManager.sayNow();
+  });
 
   setTimeout(() => {
     checkForUpdates(false).catch((error) => {
@@ -1583,5 +1067,5 @@ app.on("window-all-closed", (event) => {
 
 app.on("before-quit", () => {
   if (reminderManager) reminderManager.stop();
-  if (server) server.close();
+  if (dailyGreetingManager) dailyGreetingManager.stop();
 });

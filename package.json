@@ -1,6 +1,6 @@
 {
   "name": "our-pets",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Private desktop pet app with built-in characters.",
   "main": "src/main.js",
   "scripts": {
@@ -11,11 +11,7 @@
     "build:win": "electron-builder --win --publish never",
     "build:mac": "electron-builder --mac zip --publish never",
     "release:version": "npm version patch --no-git-tag-version",
-    "test": "node --test",
-    "hooks:doctor": "node src/hook-installer.js doctor",
-    "hooks:preview": "node src/hook-installer.js preview",
-    "hooks:install": "node src/hook-installer.js install",
-    "hooks:uninstall": "node src/hook-installer.js uninstall"
+    "test": "node --test"
   },
   "keywords": [
     "desktop-pet",

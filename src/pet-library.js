@@ -2,14 +2,12 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
 
-const STORAGE_LABELS = {
-  codex: ".codex 宠物",
-  custom: "自定义文件夹"
-};
+const ATLAS_ROWS = 11;
+const ATLAS_COLS = 8;
 
 const PET_SOURCE_LABELS = {
   builtin: "内置",
-  pets: "目录"
+  pets: "自定义"
 };
 
 function readJson(filePath) {
@@ -39,45 +37,16 @@ function sanitizeId(input, fallback = "pet") {
   return base || fallback;
 }
 
-function getPetStorageRoots({ codexHome, customPetsDir }) {
-  return {
-    codexPetsRoot: path.join(codexHome, "pets"),
-    customPetsRoot: customPetsDir ? path.resolve(customPetsDir) : ""
-  };
-}
-
-function normalizePetStorage(value, roots) {
-  if (value === "custom" && roots.customPetsRoot) return "custom";
-  return "codex";
-}
-
-function getActivePetsRoot({ codexHome, settings = {} }) {
-  const roots = getPetStorageRoots({
-    codexHome,
-    customPetsDir: settings.customPetsDir
-  });
-  const petStorage = normalizePetStorage(settings.petStorage, roots);
-  const petsRoot = petStorage === "custom" ? roots.customPetsRoot : roots.codexPetsRoot;
+function getActivePetsRoot({ settings = {} } = {}) {
+  const customPetsRoot = settings.customPetsDir
+    ? path.resolve(String(settings.customPetsDir))
+    : "";
 
   return {
-    petStorage,
-    petsRoot,
-    ...roots,
-    options: [
-      { id: "codex", label: STORAGE_LABELS.codex, path: roots.codexPetsRoot },
-      { id: "custom", label: STORAGE_LABELS.custom, path: roots.customPetsRoot }
-    ]
+    petStorage: customPetsRoot ? "custom" : "",
+    petsRoot: customPetsRoot,
+    customPetsRoot
   };
-}
-
-function normalizeSpriteVersion(value) {
-  const version = Number(value);
-  if (version === 1) return 1;
-  return 2;
-}
-
-function atlasRowsForVersion(spriteVersionNumber) {
-  return normalizeSpriteVersion(spriteVersionNumber) === 1 ? 9 : 11;
 }
 
 function discoverPetsInDirectory(petsRoot, source = "pets") {
@@ -87,7 +56,6 @@ function discoverPetsInDirectory(petsRoot, source = "pets") {
       const manifest = readJson(path.join(dir, "pet.json")) || {};
       const id = String(manifest.id || path.basename(dir));
       const spritesheetPath = path.resolve(dir, manifest.spritesheetPath || "spritesheet.webp");
-      const spriteVersionNumber = normalizeSpriteVersion(manifest.spriteVersionNumber);
 
       if (!fs.existsSync(spritesheetPath)) return null;
 
@@ -96,8 +64,8 @@ function discoverPetsInDirectory(petsRoot, source = "pets") {
         key: `${prefix}:${id}`,
         displayName: String(manifest.displayName || id),
         description: String(manifest.description || ""),
-        spriteVersionNumber,
-        atlasRows: atlasRowsForVersion(spriteVersionNumber),
+        atlasRows: ATLAS_ROWS,
+        atlasCols: ATLAS_COLS,
         source,
         sourceLabel: PET_SOURCE_LABELS[source] || source,
         root: dir,
@@ -111,22 +79,21 @@ function discoverPets(petsRoot, options = {}) {
   const bundledPets = options.bundledPetsRoot
     ? discoverPetsInDirectory(options.bundledPetsRoot, "builtin")
     : [];
-  return [
-    ...bundledPets,
-    ...discoverPetsInDirectory(petsRoot, "pets")
-  ];
+  const customPets = petsRoot
+    ? discoverPetsInDirectory(petsRoot, "pets")
+    : [];
+  return [...bundledPets, ...customPets];
 }
 
 function toPetPayload(pet) {
   if (!pet) return null;
-  const spriteVersionNumber = normalizeSpriteVersion(pet.spriteVersionNumber);
   return {
     id: pet.id,
     key: pet.key,
     displayName: pet.displayName,
     description: pet.description,
-    spriteVersionNumber,
-    atlasRows: pet.atlasRows || atlasRowsForVersion(spriteVersionNumber),
+    atlasRows: ATLAS_ROWS,
+    atlasCols: ATLAS_COLS,
     source: pet.source,
     sourceLabel: pet.sourceLabel,
     root: pet.root,
@@ -136,10 +103,10 @@ function toPetPayload(pet) {
 }
 
 module.exports = {
-  atlasRowsForVersion,
+  ATLAS_COLS,
+  ATLAS_ROWS,
   discoverPets,
   getActivePetsRoot,
-  normalizeSpriteVersion,
   sanitizeId,
   toPetPayload
 };

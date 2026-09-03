@@ -725,8 +725,7 @@ dd {
   overflow: auto;
 }
 
-.pet-item,
-.hook-item {
+.pet-item {
   display: grid;
   align-items: start;
   gap: 12px;
@@ -734,9 +733,6 @@ dd {
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.54);
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.74) inset;
-}
-
-.pet-item {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   padding: 12px;
@@ -747,8 +743,7 @@ dd {
   background: rgba(239, 248, 255, 0.74);
 }
 
-.pet-name,
-.hook-name {
+.pet-name {
   font-size: 14px;
   font-weight: 760;
   line-height: 1.3;
@@ -772,9 +767,7 @@ dd {
   line-height: 1;
 }
 
-.pet-meta,
-.hook-meta,
-.hook-missing {
+.pet-meta {
   margin-top: 4px;
   overflow-wrap: anywhere;
   color: var(--muted);
@@ -793,88 +786,6 @@ dd {
   color: var(--muted);
   font-size: 13px;
   line-height: 1.45;
-}
-
-.hook-list {
-  display: grid;
-  gap: 10px;
-}
-
-.hook-item {
-  grid-template-columns: 12px minmax(0, 1fr) auto;
-  padding: 12px;
-}
-
-.hook-lamp {
-  width: 8px;
-  height: 8px;
-  margin-top: 6px;
-  border-radius: 50%;
-  background: var(--orange);
-  box-shadow: 0 0 0 4px rgba(255, 159, 10, 0.14);
-}
-
-.hook-item.ok .hook-lamp {
-  background: var(--green);
-  box-shadow: 0 0 0 4px rgba(48, 209, 88, 0.14);
-}
-
-.hook-item.error .hook-lamp {
-  background: var(--red);
-  box-shadow: 0 0 0 4px rgba(255, 69, 58, 0.14);
-}
-
-.hook-reason {
-  margin-top: 3px;
-  color: var(--secondary);
-  font-size: 13px;
-  line-height: 1.4;
-}
-
-.hook-actions {
-  display: grid;
-  justify-items: end;
-  gap: 7px;
-}
-
-.hook-badge {
-  min-width: 54px;
-  border-radius: 999px;
-  background: rgba(255, 159, 10, 0.14);
-  color: #9a5b00;
-  padding: 4px 8px;
-  text-align: center;
-  font-size: 11px;
-  font-weight: 800;
-}
-
-.hook-item.ok .hook-badge {
-  background: rgba(48, 209, 88, 0.15);
-  color: #137333;
-}
-
-.hook-item.error .hook-badge {
-  background: rgba(255, 69, 58, 0.12);
-  color: #b42318;
-}
-
-.hook-fix,
-.hook-listen {
-  min-width: 70px;
-  min-height: 30px;
-  padding: 5px 9px;
-  font-size: 12px;
-}
-
-.hook-listen {
-  border-color: rgba(10, 132, 255, 0.38);
-  color: var(--blue-dark);
-}
-
-.hook-listen.active {
-  border-color: rgba(10, 132, 255, 0.72);
-  background: var(--blue);
-  color: #fff;
 }
 
 .action-grid {
@@ -953,8 +864,7 @@ dd {
 
   .hero-panel,
   .panel-title-row,
-  .pet-item,
-  .hook-item {
+  .pet-item {
     grid-template-columns: 1fr;
   }
 
@@ -968,14 +878,6 @@ dd {
 
   .summary-pill {
     max-width: 100%;
-  }
-
-  .hook-lamp {
-    display: none;
-  }
-
-  .hook-actions {
-    justify-items: stretch;
   }
 }
 
@@ -1319,4 +1221,41 @@ dd {
   border-color: rgba(10, 132, 255, 0.72);
   background: linear-gradient(180deg, #3aa3ff 0%, var(--blue) 100%);
   color: #fff;
+}
+
+
+/* ---- Launch & Greeting ---- */
+
+.launch-global {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.greeting-say-now {
+  align-self: flex-start;
+  min-height: 34px;
+  padding: 6px 14px;
+}
+
+.greeting-task-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.greeting-task-list .reminder-type-card.disabled {
+  opacity: 0.62;
+}
+
+.greeting-task-meta {
+  font-size: 12px;
+  color: rgba(24, 34, 47, 0.58);
+}
+
+.greeting-hint {
+  font-size: 12px;
+  color: rgba(24, 34, 47, 0.58);
+  line-height: 1.4;
+  margin: 0;
 }

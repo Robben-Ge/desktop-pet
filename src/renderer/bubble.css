@@ -29,6 +29,7 @@ body {
   color: #18222f;
   font-size: calc(13px * var(--bubble-scale));
   line-height: 1.28;
+  white-space: pre-wrap;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.13);
   overflow-wrap: anywhere;
 }

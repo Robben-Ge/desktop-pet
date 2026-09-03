@@ -123,19 +123,25 @@
             </div>
           </section>
 
-          <section class="panel">
+          <section class="panel launch-panel">
             <div class="panel-title-row">
               <div>
                 <span class="eyebrow">运行</span>
-                <h2>路径信息</h2>
+                <h2>启动与问候</h2>
               </div>
             </div>
-            <dl class="paths single">
-              <div>
-                <dt>settings</dt>
-                <dd id="settingsPath"></dd>
-              </div>
-            </dl>
+            <div class="launch-global">
+              <label class="toggle-row">
+                <span class="toggle-label">开机自启动</span>
+                <input type="checkbox" id="autoStartToggle" />
+              </label>
+              <label class="toggle-row">
+                <span class="toggle-label">每日问候</span>
+                <input type="checkbox" id="greetingEnabledToggle" />
+              </label>
+              <button type="button" id="greetingSayNowBtn" class="primary greeting-say-now">立即说一句</button>
+              <div id="greetingTaskList" class="greeting-task-list"></div>
+            </div>
           </section>
 
           <section class="panel reminder-panel">

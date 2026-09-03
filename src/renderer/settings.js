@@ -1,6 +1,5 @@
 const apiInfo = document.getElementById("apiInfo");
 const refreshBtn = document.getElementById("refreshBtn");
-const storageTabs = document.getElementById("storageTabs");
 const chooseCustomBtn = document.getElementById("chooseCustomBtn");
 const petCount = document.getElementById("petCount");
 const petCountLabel = document.getElementById("petCountLabel");
@@ -8,8 +7,6 @@ const petList = document.getElementById("petList");
 const petSourceTabs = document.getElementById("petSourceTabs");
 const reloadPetsBtn = document.getElementById("reloadPetsBtn");
 const actionGrid = document.getElementById("actionGrid");
-const hookSummary = document.getElementById("hookSummary");
-const hookList = document.getElementById("hookList");
 const zoomInfo = document.getElementById("zoomInfo");
 const bubbleInfo = document.getElementById("bubbleInfo");
 const appVersion = document.getElementById("appVersion");
@@ -21,18 +18,11 @@ const updateProgressBar = document.getElementById("updateProgressBar");
 const checkUpdateBtn = document.getElementById("checkUpdateBtn");
 const installUpdateBtn = document.getElementById("installUpdateBtn");
 const openReleasesBtn = document.getElementById("openReleasesBtn");
-const storageName = document.getElementById("storageName");
-const petsRoot = document.getElementById("petsRoot");
-const codexPetsRoot = document.getElementById("codexPetsRoot");
 const customPetsRoot = document.getElementById("customPetsRoot");
-const settingsPath = document.getElementById("settingsPath");
 
 let activePetKey = "";
 let zoom = 1;
 let bubbleScale = 1;
-let installingHookAgent = "";
-let activeHookAgent = "codex";
-let currentStorage = "codex";
 let currentCustomPetsRoot = "";
 let currentUpdateStatus = "idle";
 let allPets = [];
@@ -48,13 +38,6 @@ const UPDATE_STATUS_LABELS = {
   latest: "已是最新",
   error: "检查失败"
 };
-
-function createTextElement(tag, className, text) {
-  const element = document.createElement(tag);
-  if (className) element.className = className;
-  element.textContent = text;
-  return element;
-}
 
 function renderActions(actions) {
   if (!actionGrid) return;
@@ -77,79 +60,6 @@ function renderActions(actions) {
       });
     });
     actionGrid.appendChild(button);
-  }
-}
-
-function renderHookStatus(hooks) {
-  if (!hookList || !hookSummary) return;
-  const list = Array.isArray(hooks) ? hooks : [];
-  const okCount = list.filter((hook) => hook.state === "ok").length;
-  const selected = list.find((hook) => hook.selected);
-  hookSummary.textContent = `${okCount}/${list.length} 已接入 · 监听 ${selected?.label || activeHookAgent}`;
-  hookList.innerHTML = "";
-
-  for (const hook of list) {
-    const item = document.createElement("article");
-    item.className = `hook-item ${hook.state || "missing"}`;
-
-    const lamp = document.createElement("span");
-    lamp.className = "hook-lamp";
-    lamp.setAttribute("aria-hidden", "true");
-
-    const body = document.createElement("div");
-    body.className = "hook-body";
-    body.appendChild(createTextElement("div", "hook-name", hook.label || hook.agent));
-
-    const reason = hook.reason || (hook.state === "ok" ? "已接入" : "未接入");
-    body.appendChild(createTextElement("div", "hook-reason", reason));
-    body.appendChild(createTextElement(
-      "div",
-      "hook-meta",
-      `${hook.configuredCount || 0}/${hook.totalEvents || 0} events · ${hook.settingsPath || ""}`
-    ));
-
-    if (Array.isArray(hook.missing) && hook.missing.length > 0) {
-      body.appendChild(createTextElement("div", "hook-missing", `缺失：${hook.missing.join(", ")}`));
-    }
-
-    if (hook.lastEvent?.receivedAt) {
-      const receivedAt = new Date(hook.lastEvent.receivedAt);
-      const timeText = Number.isNaN(receivedAt.getTime()) ? hook.lastEvent.receivedAt : receivedAt.toLocaleTimeString();
-      body.appendChild(createTextElement("div", "hook-meta", `最后命中：${timeText} · ${hook.lastEvent.event || ""}`));
-    }
-
-    const actions = document.createElement("div");
-    actions.className = "hook-actions";
-    actions.appendChild(createTextElement("span", "hook-badge", hook.state === "ok" ? "OK" : (hook.state === "error" ? "ERROR" : "未接入")));
-
-    const selectButton = document.createElement("button");
-    selectButton.type = "button";
-    selectButton.className = hook.selected ? "hook-listen active" : "hook-listen";
-    selectButton.textContent = hook.selected ? "监听中" : "监听";
-    selectButton.disabled = hook.selected;
-    selectButton.addEventListener("click", () => selectHookAgent(hook));
-    actions.appendChild(selectButton);
-
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "hook-fix";
-    if (hook.state === "ok") {
-      button.textContent = "已接入";
-      button.disabled = true;
-    } else if (hook.state === "error") {
-      button.textContent = "需手动处理";
-      button.disabled = true;
-    } else {
-      button.textContent = installingHookAgent === hook.agent ? "修复中..." : "修复";
-      button.disabled = installingHookAgent === hook.agent;
-      button.addEventListener("click", () => installHook(hook));
-    }
-    actions.appendChild(button);
-
-    item.appendChild(lamp);
-    item.appendChild(body);
-    item.appendChild(actions);
-    hookList.appendChild(item);
   }
 }
 
@@ -194,48 +104,6 @@ function renderPetSourceTabs() {
     button.setAttribute("aria-selected", active ? "true" : "false");
     button.textContent = `${getPetSourceLabel(source)} ${counts[source] || 0}`;
   });
-}
-
-async function selectHookAgent(hook) {
-  if (!hook.agent) return;
-  try {
-    const result = await window.desktopPet.selectHookAgent({ agent: hook.agent });
-    if (!result.ok) {
-      window.alert(result.error || "切换监听失败");
-      return;
-    }
-    activeHookAgent = result.activeHookAgent || hook.agent;
-    renderHookStatus(result.hooks || []);
-  } catch (error) {
-    window.alert(error.message || "切换监听失败");
-  }
-}
-
-async function installHook(hook) {
-  const agent = hook.agent;
-  if (!agent) return;
-
-  const confirmed = window.confirm(`要为 ${hook.label || agent} 写入真实 hook 配置吗？\n\n配置文件：${hook.settingsPath}`);
-  if (!confirmed) return;
-
-  installingHookAgent = agent;
-  const current = await window.desktopPet.getHookStatus();
-  renderHookStatus(current.hooks || []);
-
-  try {
-    const result = await window.desktopPet.installHooks({ agent });
-    if (!result.ok) {
-      window.alert(result.error || "hook 修复失败");
-    }
-    installingHookAgent = "";
-    renderHookStatus(result.hooks || []);
-  } catch (error) {
-    window.alert(error.message || "hook 修复失败");
-  } finally {
-    installingHookAgent = "";
-    const next = await window.desktopPet.getHookStatus();
-    renderHookStatus(next.hooks || []);
-  }
 }
 
 function renderPets(pets) {
@@ -286,23 +154,10 @@ function renderPets(pets) {
 
 function renderStorage(storage) {
   if (!storage) return;
-  currentStorage = storage.petStorage || "codex";
   currentCustomPetsRoot = storage.customPetsRoot || "";
-  if (storageName) {
-    storageName.textContent = currentStorage === "custom" ? "自定义文件夹" : ".codex 宠物";
-  }
-  if (petsRoot) petsRoot.textContent = storage.petsRoot || "";
-  if (codexPetsRoot) codexPetsRoot.textContent = storage.codexPetsRoot || "";
   if (customPetsRoot) {
     customPetsRoot.textContent = storage.customPetsRoot || "未设置";
   }
-
-  if (!storageTabs) return;
-  storageTabs.querySelectorAll("[data-storage]").forEach((button) => {
-    const active = button.dataset.storage === currentStorage;
-    button.classList.toggle("active", active);
-    button.setAttribute("aria-pressed", active ? "true" : "false");
-  });
 }
 
 async function applyPetResult(result, options = {}) {
@@ -325,23 +180,21 @@ async function loadSettings() {
   renderUpdateStatus(initial.config?.updateStatus || { version: initial.config?.appVersion });
   zoomInfo.textContent = `${Math.round(zoom * 100)}%`;
   bubbleInfo.textContent = `${Math.round(bubbleScale * 100)}%`;
-  settingsPath.textContent = initial.config?.settingsPath || "";
   renderStorage({
-    petStorage: initial.config?.petStorage,
-    petsRoot: initial.config?.petsRoot,
-    codexPetsRoot: initial.config?.codexPetsRoot,
     customPetsRoot: initial.config?.customPetsRoot
   });
   renderPets(initial.pets || []);
   renderActions(initial.actions || []);
-  if (initial.config?.agentFeaturesEnabled) {
-    activeHookAgent = initial.config?.activeHookAgent || "codex";
-    renderHookStatus(initial.config?.hookStatus || []);
-    window.desktopPet.getHookStatus().then((result) => renderHookStatus(result.hooks || []));
-  }
   renderReminders(initial.config?.reminderStatus);
+  renderLaunchSettings({
+    autoStart: initial.config?.autoStart,
+    dailyGreeting: initial.config?.dailyGreeting
+  });
   window.desktopPet.getUpdateStatus().then((result) => renderUpdateStatus(result.update));
   window.desktopPet.getReminders().then((result) => { if (result.ok) renderReminders(result.reminders); });
+  window.desktopPet.getLaunchSettings().then((result) => {
+    if (result.ok) renderLaunchSettings(result);
+  });
 }
 
 window.desktopPet.onPetChange((pet) => {
@@ -400,23 +253,6 @@ installUpdateBtn.addEventListener("click", async () => {
 
 openReleasesBtn.addEventListener("click", () => {
   window.desktopPet.openReleases();
-});
-
-storageTabs?.querySelectorAll("[data-storage]").forEach((button) => {
-  button.addEventListener("click", async () => {
-    if (button.dataset.storage === "custom" && !currentCustomPetsRoot) {
-      const chosen = await window.desktopPet.chooseCustomPetStorage();
-      if (chosen.ok) applyPetResult(chosen);
-      return;
-    }
-
-    const result = await window.desktopPet.selectPetStorage({ storage: button.dataset.storage });
-    if (!result.ok) {
-      window.alert(result.error || "切换宠物目录失败");
-      return;
-    }
-    applyPetResult(result);
-  });
 });
 
 chooseCustomBtn.addEventListener("click", async () => {
@@ -814,6 +650,161 @@ const reminderCollapseBtn = document.getElementById("reminderCollapseBtn");
 const reminderPanel = document.querySelector(".reminder-panel");
 reminderCollapseBtn.addEventListener("click", () => {
   reminderPanel.classList.toggle("collapsed");
+});
+
+const autoStartToggle = document.getElementById("autoStartToggle");
+const greetingEnabledToggle = document.getElementById("greetingEnabledToggle");
+const greetingTaskList = document.getElementById("greetingTaskList");
+const greetingSayNowBtn = document.getElementById("greetingSayNowBtn");
+let currentGreetingConfig = null;
+
+function renderGreetingTasks(greeting) {
+  if (!greetingTaskList) return;
+  currentGreetingConfig = greeting || { enabled: true, tasks: [] };
+  greetingTaskList.innerHTML = "";
+
+  for (const task of currentGreetingConfig.tasks || []) {
+    const card = document.createElement("article");
+    card.className = `reminder-type-card${task.enabled ? "" : " disabled"}`;
+
+    const row1 = document.createElement("div");
+    row1.className = "reminder-top-row";
+
+    const enable = document.createElement("input");
+    enable.type = "checkbox";
+    enable.checked = task.enabled !== false;
+    enable.title = "启用";
+    enable.addEventListener("change", () => {
+      saveGreetingTask(task.id, { enabled: enable.checked });
+    });
+
+    const info = document.createElement("div");
+    info.className = "reminder-info";
+    info.innerHTML = `
+      <div class="reminder-name">${task.label || "问候"}</div>
+      <div class="greeting-task-meta">${task.kind === "startup" ? "启动时" : `每天 ${task.time || "09:00"}`}${task.triggeredToday ? " · 今天已触发" : ""}</div>
+    `;
+
+    const delBtn = document.createElement("button");
+    delBtn.type = "button";
+    delBtn.className = "reminder-delete";
+    delBtn.textContent = "删除";
+    delBtn.addEventListener("click", () => deleteGreetingTask(task.id));
+
+    row1.appendChild(enable);
+    row1.appendChild(info);
+    row1.appendChild(delBtn);
+    card.appendChild(row1);
+
+    const controls = document.createElement("div");
+    controls.className = "reminder-controls";
+
+    const kindSelect = document.createElement("select");
+    kindSelect.innerHTML = `
+      <option value="scheduled">定时</option>
+      <option value="startup">启动时</option>
+    `;
+    kindSelect.value = task.kind === "startup" ? "startup" : "scheduled";
+    kindSelect.addEventListener("change", () => {
+      const kind = kindSelect.value;
+      timeInput.hidden = kind === "startup";
+      saveGreetingTask(task.id, {
+        kind,
+        time: kind === "startup" ? "" : (timeInput.value || "09:00")
+      });
+    });
+    controls.appendChild(kindSelect);
+
+    const timeInput = document.createElement("input");
+    timeInput.type = "time";
+    timeInput.value = task.time || "09:00";
+    timeInput.hidden = task.kind === "startup";
+    timeInput.addEventListener("change", () => {
+      saveGreetingTask(task.id, { time: timeInput.value });
+    });
+    controls.appendChild(timeInput);
+
+    card.appendChild(controls);
+    greetingTaskList.appendChild(card);
+  }
+
+  const addBtn = document.createElement("button");
+  addBtn.type = "button";
+  addBtn.className = "reminder-add-btn";
+  addBtn.textContent = "+ 添加问候任务";
+  addBtn.addEventListener("click", addGreetingTask);
+  greetingTaskList.appendChild(addBtn);
+}
+
+async function saveGreetingTask(taskId, patch) {
+  const result = await window.desktopPet.updateLaunchSettings({
+    dailyGreeting: { tasks: [{ id: taskId, ...patch }] }
+  });
+  if (result.ok) renderLaunchSettings(result);
+}
+
+async function deleteGreetingTask(taskId) {
+  const confirmed = await showModal({ text: "确定删除这条问候任务吗？" });
+  if (!confirmed) return;
+  const result = await window.desktopPet.updateLaunchSettings({
+    dailyGreeting: { tasks: [{ id: taskId, __delete: true }] }
+  });
+  if (result.ok) renderLaunchSettings(result);
+}
+
+async function addGreetingTask() {
+  const label = await showModal({ text: "任务名称（如：下午茶、睡前）", input: true, defaultValue: "新问候" });
+  if (!label) return;
+
+  const id = `greeting-${Date.now()}`;
+  const result = await window.desktopPet.updateLaunchSettings({
+    dailyGreeting: {
+      tasks: [{
+        id,
+        label,
+        kind: "scheduled",
+        enabled: true,
+        time: "09:00"
+      }]
+    }
+  });
+  if (result.ok) renderLaunchSettings(result);
+}
+
+function renderLaunchSettings(payload) {
+  if (!payload) return;
+  autoStartToggle.checked = Boolean(payload.autoStart);
+  const greeting = payload.dailyGreeting || {};
+  greetingEnabledToggle.checked = greeting.enabled !== false;
+  renderGreetingTasks(greeting);
+}
+
+async function saveLaunchSettings(patch = {}) {
+  const result = await window.desktopPet.updateLaunchSettings(patch);
+  if (result.ok) renderLaunchSettings(result);
+  return result;
+}
+
+autoStartToggle.addEventListener("change", async () => {
+  await saveLaunchSettings({ autoStart: autoStartToggle.checked });
+});
+
+greetingEnabledToggle.addEventListener("change", async () => {
+  await saveLaunchSettings({
+    dailyGreeting: { enabled: greetingEnabledToggle.checked }
+  });
+});
+
+greetingSayNowBtn?.addEventListener("click", async () => {
+  greetingSayNowBtn.disabled = true;
+  try {
+    const result = await window.desktopPet.triggerGreetingNow();
+    if (!result.ok) window.alert(result.error || "触发失败");
+  } catch (error) {
+    window.alert(error.message || "触发失败");
+  } finally {
+    greetingSayNowBtn.disabled = false;
+  }
 });
 
 loadSettings();

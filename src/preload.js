@@ -3,9 +3,6 @@ const { contextBridge, ipcRenderer } = require("electron");
 contextBridge.exposeInMainWorld("desktopPet", {
   getInitialState: () => ipcRenderer.invoke("pet:get-initial-state"),
   listPets: () => ipcRenderer.invoke("pet:list-pets"),
-  getHookStatus: () => ipcRenderer.invoke("pet:get-hook-status"),
-  installHooks: (payload) => ipcRenderer.invoke("pet:install-hooks", payload),
-  selectHookAgent: (payload) => ipcRenderer.invoke("pet:select-hook-agent", payload),
   getUpdateStatus: () => ipcRenderer.invoke("pet:get-update-status"),
   checkForUpdates: () => ipcRenderer.invoke("pet:check-for-updates"),
   installUpdate: () => ipcRenderer.invoke("pet:install-update"),
@@ -57,5 +54,8 @@ contextBridge.exposeInMainWorld("desktopPet", {
   getReminders: () => ipcRenderer.invoke("pet:get-reminders"),
   updateReminderConfig: (payload) => ipcRenderer.invoke("pet:update-reminder-config", payload),
   triggerReminder: (payload) => ipcRenderer.invoke("pet:trigger-reminder", payload),
-  resetReminders: (payload) => ipcRenderer.invoke("pet:reset-reminders", payload)
+  resetReminders: (payload) => ipcRenderer.invoke("pet:reset-reminders", payload),
+  getLaunchSettings: () => ipcRenderer.invoke("pet:get-launch-settings"),
+  updateLaunchSettings: (payload) => ipcRenderer.invoke("pet:update-launch-settings", payload),
+  triggerGreetingNow: () => ipcRenderer.invoke("pet:trigger-greeting-now")
 });
