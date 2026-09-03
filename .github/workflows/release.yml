@@ -144,12 +144,12 @@ jobs:
       - name: Install DMG tooling
         run: npm install dmg-license@1.0.11 --no-save --include=optional --registry=https://registry.npmjs.org/
 
-      - name: Build macOS universal package
+      - name: Build macOS package
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
         run: |
           set -euxo pipefail
-          npx electron-builder --mac --universal --publish never -l info
+          npx electron-builder --mac --publish never -l info
           ls -lah dist
 
       - name: Upload macOS release assets

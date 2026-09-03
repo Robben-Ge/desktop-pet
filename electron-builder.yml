@@ -41,7 +41,7 @@ mac:
   category: public.app-category.utilities
   extendInfo:
     LSUIElement: true
-  identity: "-"
+  identity: null
   target:
     - dmg
     - zip
@@ -62,5 +62,5 @@ releaseInfo:
     ## Our Pets 发布版本
 
     - 发布 Windows x64 安装包
-    - 发布 macOS universal 安装包
+    - 发布 macOS arm64 安装包（Apple Silicon）
     - 从 GitHub Releases 读取自动更新
