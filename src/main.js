@@ -235,6 +235,56 @@ function getPetStorageInfo() {
   return getActivePetsRoot({ settings });
 }
 
+function isPetWindowOnScreen(bounds) {
+  if (!bounds || !Number.isFinite(bounds.x) || !Number.isFinite(bounds.y)) return false;
+  const minEdge = 64;
+  return screen.getAllDisplays().some((display) => {
+    const area = display.workArea;
+    const left = Math.max(bounds.x, area.x);
+    const top = Math.max(bounds.y, area.y);
+    const right = Math.min(bounds.x + bounds.width, area.x + area.width);
+    const bottom = Math.min(bounds.y + bounds.height, area.y + area.height);
+    return right - left >= minEdge && bottom - top >= minEdge;
+  });
+}
+
+function ensurePetWindowOnScreen() {
+  if (!win || win.isDestroyed()) return false;
+  const bounds = win.getBounds();
+  if (isPetWindowOnScreen(bounds)) return false;
+
+  const area = screen.getPrimaryDisplay().workArea;
+  const width = bounds.width || Math.round(BASE_WINDOW_WIDTH * clampZoom(settings.zoom || 1));
+  const height = bounds.height || Math.round(BASE_WINDOW_HEIGHT * clampZoom(settings.zoom || 1));
+  win.setBounds({
+    x: Math.round(area.x + Math.max(16, area.width - width - 28)),
+    y: Math.round(area.y + Math.max(16, area.height - height - 28)),
+    width,
+    height
+  });
+  settings.windowBounds = win.getBounds();
+  saveSettings();
+  positionBubble();
+  return true;
+}
+
+function showPetWindow() {
+  if (!win || win.isDestroyed()) return;
+  ensurePetWindowOnScreen();
+  win.show();
+  win.setAlwaysOnTop(true, "floating");
+  win.moveTop();
+}
+
+function togglePetWindow() {
+  if (!win || win.isDestroyed()) return;
+  if (win.isVisible() && isPetWindowOnScreen()) {
+    win.hide();
+    return;
+  }
+  showPetWindow();
+}
+
 function createWindow() {
   const savedBounds = settings.windowBounds || {};
   const zoom = clampZoom(settings.zoom || 1);
@@ -261,7 +311,7 @@ function createWindow() {
 
   win.setAlwaysOnTop(true, "floating");
   win.loadFile(path.join(__dirname, "renderer", "index.html"));
-  win.once("ready-to-show", () => win.show());
+  win.once("ready-to-show", () => showPetWindow());
   win.on("closed", () => {
     win = null;
   });
@@ -797,10 +847,7 @@ function buildTrayMenu() {
   return Menu.buildFromTemplate([
     {
       label: "显示 / 隐藏",
-      click: () => {
-        if (!win) return;
-        win.isVisible() ? win.hide() : win.show();
-      }
+      click: () => togglePetWindow()
     },
     ...(petItems.length
       ? [{ label: "切换角色", submenu: petItems }, { type: "separator" }]
@@ -871,6 +918,12 @@ app.whenReady().then(() => {
   createWindow();
   createBubbleWindow();
   createTray();
+  screen.on("display-removed", () => {
+    if (win && !win.isDestroyed() && win.isVisible()) showPetWindow();
+  });
+  screen.on("display-metrics-changed", () => {
+    if (win && !win.isDestroyed() && win.isVisible()) ensurePetWindowOnScreen();
+  });
 
   reminderManager = new ReminderManager({
     reminders: settings.reminders,
