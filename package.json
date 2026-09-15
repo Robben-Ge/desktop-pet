@@ -1,6 +1,6 @@
 {
   "name": "our-pets",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "Private desktop pet app with built-in characters.",
   "main": "src/main.js",
   "scripts": {
