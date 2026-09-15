@@ -11,6 +11,7 @@ const { ReminderManager } = require("./reminder-manager");
 const { DailyGreetingManager } = require("./daily-greeting");
 
 const LOGO_PATH = path.join(__dirname, "assets", "logo.png");
+const TRAY_ICON_PATH = path.join(__dirname, "assets", "tray-icon.png");
 const BUNDLED_PETS_ROOT = path.join(__dirname, "assets", "pets");
 const DEFAULT_PET_ID = "danna-graduation";
 const RELEASES_URL = "https://github.com/Robben-Ge/desktop-pet/releases";
@@ -132,6 +133,17 @@ function createAppIcon() {
   return nativeImage.createFromDataURL(
     "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAMAAAAoLQ9TAAAAGFBMVEUAAAAYIi9i5v9y8qaZfP/90WYfKz2xyNj28m6BAAAAB3RSTlMA///f39+fn6uU/gAAAEFJREFUeNqVj0kOwCAIBQO//2XnplkYQYJGk0BHyDKJg1xmEAjJQWYNZUdGgTYosAkfiBPwYQnKN3qHf6Snw6gudTW2DdqgAhoBA3kwAAAAAElFTkSuQmCC"
   );
+}
+
+function createTrayIcon() {
+  try {
+    const image = nativeImage.createFromPath(TRAY_ICON_PATH);
+    if (!image.isEmpty()) return image;
+  } catch (error) {
+    console.warn(`Failed to load tray icon: ${error.message}`);
+  }
+
+  return createAppIcon();
 }
 
 function getSettingsPath() {
@@ -894,7 +906,7 @@ function rebuildTrayMenu() {
 }
 
 function createTray() {
-  const icon = createAppIcon().resize({ width: 16, height: 16 });
+  const icon = createTrayIcon().resize({ width: 16, height: 16 });
   tray = new Tray(icon);
   tray.setToolTip("Our Pets");
   tray.setContextMenu(buildTrayMenu());
