@@ -56,27 +56,28 @@ body {
   background-repeat: no-repeat;
   image-rendering: auto;
   opacity: 0;
+  pointer-events: none;
 }
 
 .resize-handle {
   position: absolute;
   right: var(--handle-right);
   bottom: var(--handle-bottom);
-  width: 26px;
-  height: 26px;
+  width: calc(26px * var(--zoom));
+  height: calc(26px * var(--zoom));
   display: block;
   padding: 0;
   margin: 0;
-  border: 1px solid rgba(20, 32, 48, 0.1);
-  border-radius: 8px;
+  border: calc(1px * var(--zoom)) solid rgba(20, 32, 48, 0.1);
+  border-radius: calc(8px * var(--zoom));
   background: rgba(255, 255, 255, 0.86);
   color: #263241;
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.12);
-  backdrop-filter: blur(6px);
+  box-shadow: 0 calc(4px * var(--zoom)) calc(12px * var(--zoom)) rgba(15, 23, 42, 0.12);
+  backdrop-filter: blur(calc(6px * var(--zoom)));
   cursor: nwse-resize;
   z-index: 4;
   opacity: 0;
-  transform: translateY(2px) scale(0.94);
+  transform: translateY(calc(2px * var(--zoom))) scale(0.94);
   transition: opacity 140ms ease, transform 140ms ease, background-color 140ms ease, border-color 140ms ease;
   appearance: none;
   -webkit-app-region: no-drag;
@@ -94,7 +95,7 @@ body {
 .stage:not(.show-resize) .resize-handle,
 .pet:not([data-state="idle"]) ~ .resize-handle {
   opacity: 0;
-  transform: translateY(2px) scale(0.94);
+  transform: translateY(calc(2px * var(--zoom))) scale(0.94);
   pointer-events: none;
 }
 
@@ -103,15 +104,15 @@ body {
   opacity: 1;
   background: rgba(255, 255, 255, 0.9);
   border-color: rgba(20, 32, 48, 0.12);
-  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.14);
+  box-shadow: 0 calc(6px * var(--zoom)) calc(16px * var(--zoom)) rgba(15, 23, 42, 0.14);
 }
 
 .resize-icon {
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 18px;
-  height: 18px;
+  width: calc(18px * var(--zoom));
+  height: calc(18px * var(--zoom));
   display: block;
   pointer-events: none;
   object-fit: contain;
@@ -124,17 +125,20 @@ body {
 
 .fallback {
   position: absolute;
-  left: 20px;
-  bottom: 2px;
+  left: calc(20px * var(--zoom));
+  bottom: calc(2px * var(--zoom));
   width: 126px;
   height: 164px;
-  opacity: 0;
-  transform-origin: 50% 92%;
+  display: none;
+  pointer-events: none;
+  /* Keep scaling separate from the transform used by fallback-idle. */
+  scale: var(--zoom);
+  transform-origin: left bottom;
   animation: fallback-idle 2.2s ease-in-out infinite;
 }
 
 .fallback.show {
-  opacity: 1;
+  display: block;
 }
 
 .bot-head {
