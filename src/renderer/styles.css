@@ -39,12 +39,12 @@ body {
   height: var(--pet-height);
   transform-origin: 50% 92%;
   filter: drop-shadow(0 10px 16px rgba(0, 0, 0, 0.2));
-  cursor: grab;
+  cursor: default;
   touch-action: none;
 }
 
 .pet:active {
-  cursor: grabbing;
+  cursor: move;
 }
 
 .sprite {
