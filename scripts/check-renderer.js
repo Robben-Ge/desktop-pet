@@ -10,9 +10,16 @@ const { app, BrowserWindow, ipcMain } = require("electron");
 // the installed app's settings. Linux needs a display (or xvfb-run).
 const userData = fs.mkdtempSync(path.join(os.tmpdir(), "our-pets-renderer-"));
 app.setPath("userData", userData);
-process.once("exit", () => {
-  fs.rmSync(userData, { recursive: true, force: true });
-});
+
+function removeUserData() {
+  try {
+    fs.rmSync(userData, { recursive: true, force: true });
+  } catch {
+    // The detached cleaner retries after Chromium exits.
+  }
+}
+
+process.once("exit", removeUserData);
 const root = path.join(__dirname, "..");
 
 function scheduleUserDataCleanup() {
@@ -256,7 +263,7 @@ async function main() {
     if (window && !window.isDestroyed()) window.destroy();
     // Best-effort cleanup; the detached cleaner retries after Chromium exits.
     await delay(250);
-    fs.rmSync(userData, { recursive: true, force: true });
+    removeUserData();
   }
   process.exitCode = exitCode;
   app.quit();
