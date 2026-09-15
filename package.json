@@ -11,7 +11,8 @@
     "build:win": "electron-builder --win --publish never",
     "build:mac": "electron-builder --mac zip --publish never",
     "release:version": "npm version patch --no-git-tag-version",
-    "test": "node --test"
+    "test": "node --test",
+    "test:renderer": "electron scripts/check-renderer.js"
   },
   "keywords": [
     "desktop-pet",
