@@ -220,6 +220,12 @@ function setInteractionActive(active, point) {
   refreshMousePassthrough();
 }
 
+function releaseInteractionCapture(element, pointerId) {
+  if (typeof element.hasPointerCapture === "function" && element.hasPointerCapture(pointerId)) {
+    element.releasePointerCapture(pointerId);
+  }
+}
+
 function failSpriteHitMask(loadToken, error) {
   if (loadToken !== spriteHitMaskLoadToken) return;
   spriteHitMask = null;
@@ -369,17 +375,18 @@ function setPetState(payload) {
 async function startDrag(event) {
   if (event.button !== 0) return;
   if (event.target.closest("#resizeHandle")) return;
-  const bounds = await window.desktopPet.getWindowBounds();
-  if (!bounds) return;
+  if (dragStart || resizeStart) return;
 
-  dragStart = {
+  const pendingDrag = {
     pointerId: event.pointerId,
     startScreenX: event.screenX,
     startScreenY: event.screenY,
     lastScreenX: event.screenX,
-    windowX: bounds.x,
-    windowY: bounds.y
+    windowX: null,
+    windowY: null,
+    boundsReady: false
   };
+  dragStart = pendingDrag;
   clickCandidate = {
     screenX: event.screenX,
     screenY: event.screenY,
@@ -388,10 +395,31 @@ async function startDrag(event) {
   lastDragDirection = null;
   pet.setPointerCapture(event.pointerId);
   setInteractionActive(true, event);
+
+  let bounds = null;
+  try {
+    bounds = await window.desktopPet.getWindowBounds();
+  } catch {
+    // Treat a failed IPC request like a missing window so the input lock cannot stick.
+  }
+
+  if (dragStart !== pendingDrag) return;
+  if (!bounds) {
+    dragStart = null;
+    clickCandidate = null;
+    lastDragDirection = null;
+    releaseInteractionCapture(pet, event.pointerId);
+    setInteractionActive(false);
+    return;
+  }
+
+  pendingDrag.windowX = bounds.x;
+  pendingDrag.windowY = bounds.y;
+  pendingDrag.boundsReady = true;
 }
 
 function moveDrag(event) {
-  if (!dragStart || event.pointerId !== dragStart.pointerId) return;
+  if (!dragStart || !dragStart.boundsReady || event.pointerId !== dragStart.pointerId) return;
   const dx = event.screenX - dragStart.startScreenX;
   const dy = event.screenY - dragStart.startScreenY;
   const stepX = event.screenX - dragStart.lastScreenX;
@@ -453,25 +481,45 @@ async function startResize(event) {
   if (event.button !== 0) return;
   event.preventDefault();
   event.stopPropagation();
+  if (dragStart || resizeStart) return;
 
-  const bounds = await window.desktopPet.getWindowBounds();
-  if (!bounds) return;
-
-  resizeStart = {
+  const pendingResize = {
     pointerId: event.pointerId,
     startScreenX: event.screenX,
     startScreenY: event.screenY,
-    width: bounds.width,
-    height: bounds.height,
-    zoom
+    width: null,
+    height: null,
+    zoom,
+    boundsReady: false
   };
+  resizeStart = pendingResize;
   showResizeHandle();
   resizeHandle.setPointerCapture(event.pointerId);
   setInteractionActive(true, event);
+
+  let bounds = null;
+  try {
+    bounds = await window.desktopPet.getWindowBounds();
+  } catch {
+    // Treat a failed IPC request like a missing window so the input lock cannot stick.
+  }
+
+  if (resizeStart !== pendingResize) return;
+  if (!bounds) {
+    resizeStart = null;
+    releaseInteractionCapture(resizeHandle, event.pointerId);
+    setInteractionActive(false);
+    hideResizeHandleSoon();
+    return;
+  }
+
+  pendingResize.width = bounds.width;
+  pendingResize.height = bounds.height;
+  pendingResize.boundsReady = true;
 }
 
 function moveResize(event) {
-  if (!resizeStart || event.pointerId !== resizeStart.pointerId) return;
+  if (!resizeStart || !resizeStart.boundsReady || event.pointerId !== resizeStart.pointerId) return;
   event.preventDefault();
   event.stopPropagation();
 
@@ -495,6 +543,10 @@ function endResize(event) {
 }
 
 document.addEventListener("mousemove", rememberPointerPosition, true);
+document.addEventListener("pointerup", endDrag);
+document.addEventListener("pointercancel", endDrag);
+document.addEventListener("pointerup", endResize);
+document.addEventListener("pointercancel", endResize);
 document.addEventListener("mouseleave", () => {
   if (interactionActive) return;
   lastPointerPosition = null;

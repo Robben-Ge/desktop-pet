@@ -81,13 +81,26 @@ const bundledHitTestPets = fs.readdirSync(path.join(root, "src/assets/pets"), { 
 const calls = [];
 let window;
 let bounds = { x: 100, y: 100, width: 156, height: 186 };
+let nextWindowBoundsResponse = null;
+let releaseWindowBoundsResponse = null;
+let completedWindowBoundsResponses = 0;
 
 ipcMain.handle("pet:get-initial-state", () => ({
   config: { zoom: 0.65, minZoom: 0.65, maxZoom: 2.4 },
   activePet,
   state: "idle"
 }));
-ipcMain.handle("pet:get-window-bounds", () => bounds);
+ipcMain.handle("pet:get-window-bounds", async () => {
+  const response = nextWindowBoundsResponse;
+  nextWindowBoundsResponse = null;
+  if (response?.defer) {
+    await new Promise((resolve) => {
+      releaseWindowBoundsResponse = resolve;
+    });
+  }
+  completedWindowBoundsResponses += 1;
+  return response?.missing ? null : bounds;
+});
 for (const channel of ["pet:set-state", "pet:move-window", "pet:resize-window", "pet:finish-drag"]) {
   ipcMain.handle(channel, (_event, payload) => {
     calls.push({ channel, payload });
@@ -113,6 +126,18 @@ async function waitFor(predicate, description) {
     assert.ok(Date.now() < deadline, `Timed out: ${description}`);
     await delay(20);
   }
+}
+async function releaseDeferredWindowBoundsResponse() {
+  await waitFor(() => Boolean(releaseWindowBoundsResponse), "deferred window bounds request");
+  const completedBeforeRelease = completedWindowBoundsResponses;
+  const release = releaseWindowBoundsResponse;
+  releaseWindowBoundsResponse = null;
+  release();
+  await waitFor(
+    () => completedWindowBoundsResponses > completedBeforeRelease,
+    "deferred window bounds response"
+  );
+  await delay(20);
 }
 function near(actual, expected, description) {
   assert.ok(Math.abs(actual - expected) < 0.08, `${description}: expected ${expected}, got ${actual}`);
@@ -543,6 +568,81 @@ async function run() {
   const rects = await geometry();
   const x = Math.round(rects.pet.left + rects.pet.width / 2);
   const y = Math.round(rects.pet.top + rects.pet.height / 2);
+
+  const pendingDragCallStart = calls.length;
+  nextWindowBoundsResponse = { defer: true };
+  mouse("mouseDown", x, y);
+  await waitFor(
+    () => evaluate("interactionActive && dragStart !== null && dragStart.boundsReady === false"),
+    "drag input lock before bounds resolve"
+  );
+  mouse("mouseMove", 2, 2);
+  await delay(20);
+  assert.deepEqual(
+    await evaluate("({ interactionActive, mouseEventsIgnored })"),
+    { interactionActive: true, mouseEventsIgnored: false },
+    "pending drag must keep transparent pixels interactive"
+  );
+  assert.equal(
+    calls.slice(pendingDragCallStart).some((call) => call.channel === "pet:move-window"),
+    false,
+    "pending drag must not move the window before bounds resolve"
+  );
+  mouse("mouseUp", 2, 2);
+  await waitFor(
+    () => evaluate("dragStart === null && interactionActive === false"),
+    "pending drag release"
+  );
+  await releaseDeferredWindowBoundsResponse();
+  assert.equal(await evaluate("dragStart"), null, "late drag bounds must not resurrect a released gesture");
+
+  await evaluate('document.querySelector(".stage").classList.add("show-resize")');
+  const pendingHandle = (await geometry()).handle;
+  const pendingHandleX = Math.round(pendingHandle.left + pendingHandle.width / 2);
+  const pendingHandleY = Math.round(pendingHandle.top + pendingHandle.height / 2);
+  mouse("mouseMove", pendingHandleX, pendingHandleY);
+  const pendingResizeCallStart = calls.length;
+  nextWindowBoundsResponse = { defer: true };
+  mouse("mouseDown", pendingHandleX, pendingHandleY);
+  await waitFor(
+    () => evaluate("interactionActive && resizeStart !== null && resizeStart.boundsReady === false"),
+    "resize input lock before bounds resolve"
+  );
+  mouse("mouseMove", 2, 2);
+  await delay(20);
+  assert.deepEqual(
+    await evaluate("({ interactionActive, mouseEventsIgnored })"),
+    { interactionActive: true, mouseEventsIgnored: false },
+    "pending resize must keep transparent pixels interactive"
+  );
+  assert.equal(
+    calls.slice(pendingResizeCallStart).some((call) => call.channel === "pet:resize-window"),
+    false,
+    "pending resize must not resize the window before bounds resolve"
+  );
+  mouse("mouseUp", 2, 2);
+  await waitFor(
+    () => evaluate("resizeStart === null && interactionActive === false"),
+    "pending resize release"
+  );
+  await releaseDeferredWindowBoundsResponse();
+  assert.equal(await evaluate("resizeStart"), null, "late resize bounds must not resurrect a released gesture");
+
+  mouse("mouseMove", x, y);
+  nextWindowBoundsResponse = { defer: true, missing: true };
+  mouse("mouseDown", x, y);
+  await waitFor(
+    () => evaluate("interactionActive && dragStart !== null && dragStart.boundsReady === false"),
+    "failed bounds request starts locked"
+  );
+  await releaseDeferredWindowBoundsResponse();
+  await waitFor(
+    () => evaluate("dragStart === null && interactionActive === false"),
+    "failed bounds request clears input lock"
+  );
+  mouse("mouseUp", x, y);
+  console.log("PASS: pending drag and resize gestures hold and safely release the input lock");
+
   mouse("mouseMove", 2, 2);
   await evaluate('document.querySelector(".stage").classList.remove("show-resize")');
   mouse("mouseMove", x, y);
@@ -553,12 +653,13 @@ async function run() {
   await waitFor(() => calls.some((call) => call.channel === "pet:set-state"), "pet click action");
   assert.equal(calls.find((call) => call.channel === "pet:set-state").payload.state, "jumping");
 
+  const dragCallStart = calls.length;
   mouse("mouseDown", x, y);
   await waitFor(() => evaluate("dragStart !== null"), "second pet drag start");
   mouse("mouseMove", x + 12, y + 8);
-  await waitFor(() => calls.some((call) => call.channel === "pet:move-window" && call.payload.x === 112 && call.payload.y === 108), "pet drag movement");
+  await waitFor(() => calls.slice(dragCallStart).some((call) => call.channel === "pet:move-window" && call.payload.x === 112 && call.payload.y === 108), "pet drag movement");
   mouse("mouseUp", x + 12, y + 8);
-  await waitFor(() => calls.some((call) => call.channel === "pet:finish-drag"), "pet drag end");
+  await waitFor(() => calls.slice(dragCallStart).some((call) => call.channel === "pet:finish-drag"), "pet drag end");
   assert.deepEqual(calls.filter((call) => call.channel === "pet:move-window").at(-1).payload, { x: 112, y: 108 });
 
   await evaluate('document.querySelector(".stage").classList.add("show-resize")');
@@ -589,8 +690,7 @@ async function main() {
     await delay(250);
     removeUserData();
   }
-  process.exitCode = exitCode;
-  app.quit();
+  app.exit(exitCode);
 }
 
 main();
