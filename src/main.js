@@ -9,6 +9,7 @@ const {
 } = require("./pet-library");
 const { ReminderManager } = require("./reminder-manager");
 const { DailyGreetingManager } = require("./daily-greeting");
+const { getCursorProbeDispatch } = require("./cursor-probe");
 
 const LOGO_PATH = path.join(__dirname, "assets", "logo.png");
 const TRAY_ICON_PATH = path.join(__dirname, "assets", "tray-icon.png");
@@ -322,9 +323,12 @@ function probePetCursor() {
     inside: cursor.x >= bounds.x && cursor.x < bounds.x + bounds.width &&
       cursor.y >= bounds.y && cursor.y < bounds.y + bounds.height
   };
-  const probeKey = point.inside ? String(point.x) + ":" + point.y : "outside";
-  if (probeKey === lastPetCursorProbe) return;
-  lastPetCursorProbe = probeKey;
+  // While the pointer is inside, CSS animations can move opaque pixels under
+  // a stationary cursor. Re-send inside points so the renderer recalculates
+  // the current transformed hit area; only collapse repeated outside probes.
+  const dispatch = getCursorProbeDispatch(point, lastPetCursorProbe);
+  lastPetCursorProbe = dispatch.key;
+  if (!dispatch.shouldSend) return;
   win.webContents.send("pet:cursor-position", point);
 }
 

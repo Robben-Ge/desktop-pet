@@ -229,6 +229,47 @@ async function rotatedSpriteHitMaskResult() {
   })()`);
 }
 
+async function stationaryTransformHitPoint() {
+  return evaluate(`(() => {
+    const petElement = document.querySelector("#pet");
+    const spriteElement = document.querySelector("#sprite");
+    const previousTransform = petElement.style.transform;
+    try {
+      petElement.style.transform = "translateY(0px)";
+      const petStyle = getComputedStyle(petElement);
+      const spriteStyle = getComputedStyle(spriteElement);
+      const petHeight = Number.parseFloat(petStyle.height);
+      const petLeft = Number.parseFloat(petStyle.left);
+      const petTop = innerHeight - Number.parseFloat(petStyle.bottom) - petHeight;
+      const spriteWidth = Number.parseFloat(spriteStyle.width);
+      const spriteHeight = Number.parseFloat(spriteStyle.height);
+      const spriteLeft = petLeft + Number.parseFloat(spriteStyle.left);
+      const spriteTop = petTop + petHeight - Number.parseFloat(spriteStyle.bottom) - spriteHeight;
+      let candidates = [];
+
+      for (let cellY = CELL_HEIGHT - 1; cellY >= 0 && candidates.length === 0; cellY -= 1) {
+        for (let cellX = 0; cellX < CELL_WIDTH; cellX += 1) {
+          if (!isSpriteCellPointInteractive(cellX + 0.5, cellY + 0.5)) continue;
+          candidates.push({
+            x: spriteLeft + (cellX + 0.5) * spriteWidth / CELL_WIDTH,
+            y: spriteTop + (cellY + 0.5) * spriteHeight / CELL_HEIGHT
+          });
+        }
+      }
+
+      petElement.style.transform = "translateY(-14px)";
+      const point = candidates.find(({ x, y }) => !isSpritePointInteractive(x, y)) || null;
+      if (!point) return null;
+      const movedInteractive = isSpritePointInteractive(point.x, point.y);
+      petElement.style.transform = "translateY(0px)";
+      const restingInteractive = isSpritePointInteractive(point.x, point.y);
+      return { point, restingInteractive, movedInteractive };
+    } finally {
+      petElement.style.transform = previousTransform;
+    }
+  })()`);
+}
+
 async function run() {
   await app.whenReady();
   window = new BrowserWindow({
@@ -332,6 +373,32 @@ async function run() {
     "rotated mask regression must distinguish inverse mapping from an axis-aligned bounding box"
   );
   console.log("PASS: rotated animation frames preserve pixel-accurate hit testing");
+
+  const stationaryTransform = await stationaryTransformHitPoint();
+  assert.ok(stationaryTransform, "animation test must find a pixel crossed by the moving pet");
+  assert.equal(stationaryTransform.restingInteractive, true);
+  assert.equal(stationaryTransform.movedInteractive, false);
+  await evaluate('document.querySelector("#pet").style.transform = "translateY(0px)"; mouseEventsIgnored = null;');
+  const restingProbeCalls = calls.length;
+  window.webContents.send("pet:cursor-position", { ...stationaryTransform.point, inside: true });
+  await waitFor(
+    () => calls.slice(restingProbeCalls).some(
+      (call) => call.channel === "pet:set-ignore-mouse-events" && call.payload === false
+    ),
+    "stationary cursor enables input over the resting pet"
+  );
+  await evaluate('document.querySelector("#pet").style.transform = "translateY(-14px)"');
+  const movedProbeCalls = calls.length;
+  window.webContents.send("pet:cursor-position", { ...stationaryTransform.point, inside: true });
+  await waitFor(
+    () => calls.slice(movedProbeCalls).some(
+      (call) => call.channel === "pet:set-ignore-mouse-events" && call.payload === true
+    ),
+    "stationary cursor passes through after the pet moves away"
+  );
+  await evaluate('document.querySelector("#pet").style.transform = ""');
+  console.log("PASS: stationary cursor probes track CSS transform animation");
+
   window.webContents.send("pet:set-state", { state: "running" });
   await waitFor(() => evaluate('document.querySelector("#pet").dataset.state === "running"'), "non-idle state");
   assert.equal(await evaluate('getComputedStyle(document.querySelector("#resizeHandle")).pointerEvents'), "none", "hidden handle must not intercept input");
