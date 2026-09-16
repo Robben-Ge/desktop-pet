@@ -60,6 +60,9 @@ let updatePromptVisible = false;
 let pendingUpdateInfo = null;
 let reminderManager = null;
 let dailyGreetingManager = null;
+let petWindowIgnoresMouse = null;
+let petCursorProbeTimer = null;
+let lastPetCursorProbe = null;
 let updateStatus = {
   status: "idle",
   message: "尚未检查更新",
@@ -286,15 +289,56 @@ function showPetWindow() {
   win.show();
   win.setAlwaysOnTop(true, "floating");
   win.moveTop();
+  startPetCursorProbe();
 }
 
 function togglePetWindow() {
   if (!win || win.isDestroyed()) return;
   if (win.isVisible() && isPetWindowOnScreen()) {
+    stopPetCursorProbe();
     win.hide();
     return;
   }
   showPetWindow();
+}
+
+function setPetWindowMousePassthrough(ignore) {
+  if (!win || win.isDestroyed()) return false;
+  const nextIgnore = Boolean(ignore);
+  if (petWindowIgnoresMouse === nextIgnore) return true;
+
+  win.setIgnoreMouseEvents(nextIgnore, nextIgnore ? { forward: true } : undefined);
+  petWindowIgnoresMouse = nextIgnore;
+  return true;
+}
+
+function probePetCursor() {
+  if (!win || win.isDestroyed() || !win.isVisible() || win.webContents.isDestroyed()) return;
+  const bounds = win.getBounds();
+  const cursor = screen.getCursorScreenPoint();
+  const point = {
+    x: cursor.x - bounds.x,
+    y: cursor.y - bounds.y,
+    inside: cursor.x >= bounds.x && cursor.x < bounds.x + bounds.width &&
+      cursor.y >= bounds.y && cursor.y < bounds.y + bounds.height
+  };
+  const probeKey = point.inside ? String(point.x) + ":" + point.y : "outside";
+  if (probeKey === lastPetCursorProbe) return;
+  lastPetCursorProbe = probeKey;
+  win.webContents.send("pet:cursor-position", point);
+}
+
+function startPetCursorProbe() {
+  if (petCursorProbeTimer) return;
+  lastPetCursorProbe = null;
+  probePetCursor();
+  petCursorProbeTimer = setInterval(probePetCursor, 32);
+}
+
+function stopPetCursorProbe() {
+  clearInterval(petCursorProbeTimer);
+  petCursorProbeTimer = null;
+  lastPetCursorProbe = null;
 }
 
 function createWindow() {
@@ -322,9 +366,12 @@ function createWindow() {
   });
 
   win.setAlwaysOnTop(true, "floating");
+  setPetWindowMousePassthrough(true);
   win.loadFile(path.join(__dirname, "renderer", "index.html"));
   win.once("ready-to-show", () => showPetWindow());
   win.on("closed", () => {
+    stopPetCursorProbe();
+    petWindowIgnoresMouse = null;
     win = null;
   });
 }
@@ -1040,6 +1087,10 @@ app.whenReady().then(() => {
   ipcMain.handle("pet:get-window-bounds", () => {
     if (!win || win.isDestroyed()) return null;
     return win.getBounds();
+  });
+  ipcMain.on("pet:set-ignore-mouse-events", (event, ignore) => {
+    if (!win || win.isDestroyed() || event.sender !== win.webContents) return;
+    setPetWindowMousePassthrough(ignore);
   });
   ipcMain.handle("pet:get-window-placement", () => getWindowPlacement());
   ipcMain.handle("pet:move-window", (_event, point) => {

@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld("desktopPet", {
   openPetFolder: (payload) => ipcRenderer.invoke("pet:open-folder", payload),
   setState: (payload) => ipcRenderer.invoke("pet:set-state", payload),
   getWindowBounds: () => ipcRenderer.invoke("pet:get-window-bounds"),
+  setIgnoreMouseEvents: (ignore) => ipcRenderer.send("pet:set-ignore-mouse-events", Boolean(ignore)),
   getWindowPlacement: () => ipcRenderer.invoke("pet:get-window-placement"),
   moveWindow: (point) => ipcRenderer.invoke("pet:move-window", point),
   resizeWindow: (payload) => ipcRenderer.invoke("pet:resize-window", payload),
@@ -35,6 +36,11 @@ contextBridge.exposeInMainWorld("desktopPet", {
     const listener = (_event, payload) => callback(payload);
     ipcRenderer.on("pet:set-zoom", listener);
     return () => ipcRenderer.removeListener("pet:set-zoom", listener);
+  },
+  onCursorPosition: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on("pet:cursor-position", listener);
+    return () => ipcRenderer.removeListener("pet:cursor-position", listener);
   },
   onBubbleScaleChange: (callback) => {
     const listener = (_event, payload) => callback(payload);
