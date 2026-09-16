@@ -9,6 +9,7 @@ const {
 } = require("./pet-library");
 const { ReminderManager } = require("./reminder-manager");
 const { DailyGreetingManager } = require("./daily-greeting");
+const { getCursorProbeDispatch } = require("./cursor-probe");
 
 const LOGO_PATH = path.join(__dirname, "assets", "logo.png");
 const TRAY_ICON_PATH = path.join(__dirname, "assets", "tray-icon.png");
@@ -60,6 +61,9 @@ let updatePromptVisible = false;
 let pendingUpdateInfo = null;
 let reminderManager = null;
 let dailyGreetingManager = null;
+let petWindowIgnoresMouse = null;
+let petCursorProbeTimer = null;
+let lastPetCursorProbe = null;
 let updateStatus = {
   status: "idle",
   message: "尚未检查更新",
@@ -286,15 +290,59 @@ function showPetWindow() {
   win.show();
   win.setAlwaysOnTop(true, "floating");
   win.moveTop();
+  startPetCursorProbe();
 }
 
 function togglePetWindow() {
   if (!win || win.isDestroyed()) return;
   if (win.isVisible() && isPetWindowOnScreen()) {
+    stopPetCursorProbe();
     win.hide();
     return;
   }
   showPetWindow();
+}
+
+function setPetWindowMousePassthrough(ignore) {
+  if (!win || win.isDestroyed()) return false;
+  const nextIgnore = Boolean(ignore);
+  if (petWindowIgnoresMouse === nextIgnore) return true;
+
+  win.setIgnoreMouseEvents(nextIgnore, nextIgnore ? { forward: true } : undefined);
+  petWindowIgnoresMouse = nextIgnore;
+  return true;
+}
+
+function probePetCursor() {
+  if (!win || win.isDestroyed() || !win.isVisible() || win.webContents.isDestroyed()) return;
+  const bounds = win.getBounds();
+  const cursor = screen.getCursorScreenPoint();
+  const point = {
+    x: cursor.x - bounds.x,
+    y: cursor.y - bounds.y,
+    inside: cursor.x >= bounds.x && cursor.x < bounds.x + bounds.width &&
+      cursor.y >= bounds.y && cursor.y < bounds.y + bounds.height
+  };
+  // While the pointer is inside, CSS animations can move opaque pixels under
+  // a stationary cursor. Re-send inside points so the renderer recalculates
+  // the current transformed hit area; only collapse repeated outside probes.
+  const dispatch = getCursorProbeDispatch(point, lastPetCursorProbe);
+  lastPetCursorProbe = dispatch.key;
+  if (!dispatch.shouldSend) return;
+  win.webContents.send("pet:cursor-position", point);
+}
+
+function startPetCursorProbe() {
+  if (petCursorProbeTimer) return;
+  lastPetCursorProbe = null;
+  probePetCursor();
+  petCursorProbeTimer = setInterval(probePetCursor, 32);
+}
+
+function stopPetCursorProbe() {
+  clearInterval(petCursorProbeTimer);
+  petCursorProbeTimer = null;
+  lastPetCursorProbe = null;
 }
 
 function createWindow() {
@@ -322,9 +370,12 @@ function createWindow() {
   });
 
   win.setAlwaysOnTop(true, "floating");
+  setPetWindowMousePassthrough(true);
   win.loadFile(path.join(__dirname, "renderer", "index.html"));
   win.once("ready-to-show", () => showPetWindow());
   win.on("closed", () => {
+    stopPetCursorProbe();
+    petWindowIgnoresMouse = null;
     win = null;
   });
 }
@@ -1040,6 +1091,10 @@ app.whenReady().then(() => {
   ipcMain.handle("pet:get-window-bounds", () => {
     if (!win || win.isDestroyed()) return null;
     return win.getBounds();
+  });
+  ipcMain.on("pet:set-ignore-mouse-events", (event, ignore) => {
+    if (!win || win.isDestroyed() || event.sender !== win.webContents) return;
+    setPetWindowMousePassthrough(ignore);
   });
   ipcMain.handle("pet:get-window-placement", () => getWindowPlacement());
   ipcMain.handle("pet:move-window", (_event, point) => {
