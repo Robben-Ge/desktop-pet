@@ -3,6 +3,10 @@ const stage = document.querySelector(".stage");
 const sprite = document.getElementById("sprite");
 const fallback = document.getElementById("fallback");
 const resizeHandle = document.getElementById("resizeHandle");
+const fallbackArtwork = [
+  fallback.querySelector(".bot-head"),
+  fallback.querySelector(".bot-body")
+].filter(Boolean);
 
 const CELL_WIDTH = 192;
 const CELL_HEIGHT = 208;
@@ -166,6 +170,14 @@ function isSpritePointInteractive(clientX, clientY) {
   );
 }
 
+function isFallbackPointInteractive(clientX, clientY) {
+  if (!fallback.classList.contains("show")) return false;
+  const target = document.elementFromPoint(clientX, clientY);
+  return Boolean(target) && fallbackArtwork.some((element) => (
+    target === element || element.contains(target)
+  ));
+}
+
 function isInteractivePoint(clientX, clientY) {
   if (interactionActive) return true;
 
@@ -175,10 +187,7 @@ function isInteractivePoint(clientX, clientY) {
     return true;
   }
 
-  if (fallback.classList.contains("show") &&
-      pointInRect(clientX, clientY, fallback.getBoundingClientRect())) {
-    return true;
-  }
+  if (isFallbackPointInteractive(clientX, clientY)) return true;
 
   return isSpritePointInteractive(clientX, clientY);
 }

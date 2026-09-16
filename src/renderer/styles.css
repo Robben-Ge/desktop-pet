@@ -141,6 +141,11 @@ body {
   display: block;
 }
 
+.bot-head,
+.bot-body {
+  pointer-events: auto;
+}
+
 .bot-head {
   position: absolute;
   left: 16px;

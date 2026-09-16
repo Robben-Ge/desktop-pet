@@ -167,6 +167,77 @@ async function spriteHitMaskPoints() {
   })()`);
 }
 
+async function fallbackHitTestPoints() {
+  return evaluate(`(() => {
+    const fallbackRect = document.querySelector("#fallback").getBoundingClientRect();
+    const headRect = document.querySelector(".bot-head").getBoundingClientRect();
+    const bodyRect = document.querySelector(".bot-body").getBoundingClientRect();
+    const inset = Math.max(1, Number(getComputedStyle(document.documentElement)
+      .getPropertyValue("--zoom")) || 1);
+    const marginCandidates = [
+      { x: fallbackRect.left + inset, y: fallbackRect.top + inset },
+      { x: fallbackRect.right - inset, y: fallbackRect.top + inset },
+      { x: fallbackRect.left + inset, y: fallbackRect.bottom - inset },
+      { x: fallbackRect.right - inset, y: fallbackRect.bottom - inset }
+    ];
+    const margin = marginCandidates.find(({ x, y }) => !isFallbackPointInteractive(x, y)) || null;
+    const artwork = {
+      x: headRect.left + headRect.width / 2,
+      y: headRect.top + headRect.height / 2
+    };
+    const body = {
+      x: bodyRect.left + bodyRect.width / 2,
+      y: bodyRect.top + bodyRect.height / 2
+    };
+    const roundedCorner = {
+      x: headRect.left + 1,
+      y: headRect.top + 1
+    };
+    return {
+      artwork: { ...artwork, interactive: isFallbackPointInteractive(artwork.x, artwork.y) },
+      body: { ...body, interactive: isFallbackPointInteractive(body.x, body.y) },
+      roundedCorner: {
+        ...roundedCorner,
+        interactive: isFallbackPointInteractive(roundedCorner.x, roundedCorner.y)
+      },
+      margin: margin && { ...margin, interactive: isFallbackPointInteractive(margin.x, margin.y) }
+    };
+  })()`);
+}
+
+async function rotatedFallbackHitTestResult() {
+  return evaluate(`(() => {
+    const petElement = document.querySelector("#pet");
+    const previousTransform = petElement.style.transform;
+    try {
+      petElement.style.transform = "rotate(4deg)";
+      const elements = [
+        document.querySelector(".bot-head"),
+        document.querySelector(".bot-body")
+      ];
+      let interactive = null;
+      let transparentBoundingBoxPoint = null;
+      for (const element of elements) {
+        const rect = element.getBoundingClientRect();
+        const center = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+        if (!interactive && isFallbackPointInteractive(center.x, center.y)) interactive = center;
+        const candidates = [
+          { x: rect.left + 1, y: rect.top + 1 },
+          { x: rect.right - 1, y: rect.top + 1 },
+          { x: rect.left + 1, y: rect.bottom - 1 },
+          { x: rect.right - 1, y: rect.bottom - 1 }
+        ];
+        transparentBoundingBoxPoint ||= candidates.find(
+          ({ x, y }) => !isFallbackPointInteractive(x, y)
+        ) || null;
+      }
+      return { interactive, transparentBoundingBoxPoint };
+    } finally {
+      petElement.style.transform = previousTransform;
+    }
+  })()`);
+}
+
 async function rotatedSpriteHitMaskResult() {
   return evaluate(`(() => {
     const petElement = document.querySelector("#pet");
@@ -413,6 +484,29 @@ async function run() {
     "broken spritesheet fallback"
   );
   assert.equal(await evaluate('document.querySelector("#sprite").classList.contains("ready")'), false);
+  const brokenFallbackPoints = await fallbackHitTestPoints();
+  assert.equal(brokenFallbackPoints.artwork.interactive, true);
+  assert.equal(brokenFallbackPoints.body.interactive, true);
+  assert.ok(brokenFallbackPoints.margin, "fallback must retain transparent margins");
+  assert.equal(brokenFallbackPoints.roundedCorner.interactive, false);
+  assert.equal(brokenFallbackPoints.margin.interactive, false);
+  await evaluate("mouseEventsIgnored = null");
+  const fallbackMarginCalls = calls.length;
+  window.webContents.send("pet:cursor-position", { ...brokenFallbackPoints.margin, inside: true });
+  await waitFor(
+    () => calls.slice(fallbackMarginCalls).some(
+      (call) => call.channel === "pet:set-ignore-mouse-events" && call.payload === true
+    ),
+    "fallback transparent margin enables click-through"
+  );
+  const fallbackArtworkCalls = calls.length;
+  window.webContents.send("pet:cursor-position", { ...brokenFallbackPoints.artwork, inside: true });
+  await waitFor(
+    () => calls.slice(fallbackArtworkCalls).some(
+      (call) => call.channel === "pet:set-ignore-mouse-events" && call.payload === false
+    ),
+    "visible fallback artwork enables mouse input"
+  );
   console.log("PASS: a broken spritesheet falls back without a rectangular sprite hit area");
 
   window.webContents.send("pet:set-pet", { key: "missing-spritesheet" });
@@ -429,8 +523,20 @@ async function run() {
     hits = await hitTargets();
     assert.equal(hits.above.pet, false, `fallback must fit inside pet at ${zoom}`);
     assert.equal(hits.right.pet, false, `fallback must fit inside pet at ${zoom}`);
-    assert.equal(hits.inside.id, "pet", `fallback and hidden sprite must not intercept input at ${zoom}`);
+    assert.equal(hits.inside.pet, true, `visible fallback artwork must stay inside the pet at ${zoom}`);
+    const fallbackPoints = await fallbackHitTestPoints();
+    assert.equal(fallbackPoints.artwork.interactive, true, `fallback artwork must be interactive at ${zoom}`);
+    assert.equal(fallbackPoints.body.interactive, true, `fallback body must be interactive at ${zoom}`);
+    assert.ok(fallbackPoints.margin, `fallback must have a transparent margin at ${zoom}`);
+    assert.equal(fallbackPoints.margin.interactive, false, `fallback margin must pass through at ${zoom}`);
+    assert.equal(fallbackPoints.roundedCorner.interactive, false, `fallback rounded corner must pass through at ${zoom}`);
   }
+  const rotatedFallback = await rotatedFallbackHitTestResult();
+  assert.ok(rotatedFallback.interactive, "rotated fallback artwork must remain interactive");
+  assert.ok(
+    rotatedFallback.transparentBoundingBoxPoint,
+    "rotated fallback bounding-box transparency must pass through"
+  );
   console.log("PASS: missing-spritesheet fallback stays visible, scaled, and inside the pet");
 
   await setZoom(0.65);
