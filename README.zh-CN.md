@@ -55,7 +55,7 @@ npm start
 PET_ID=danna-graduation npm start
 ```
 
-当前内置角色 ID：`danna-graduation`、`danna-dress`、`robben`。
+当前内置角色 ID：`danna-graduation`、`danna-dress`、`robben`、`robben-plaid`、`dan-black-dress`。
 
 ## 日常使用
 
@@ -71,13 +71,15 @@ PET_ID=danna-graduation npm start
 
 ## 角色与自定义宠物
 
-应用内置三位角色：
+应用内置五位角色：
 
 | 角色 | ID | 简介 |
 | --- | --- | --- |
 | Danna · 毕业袍 | `danna-graduation` | 默认角色，穿着学士服的 Danna。 |
 | Danna · 长裙 | `danna-dress` | 更日常、温柔的 Danna 造型。 |
 | Robben | `robben` | 陪你写代码、休息和发呆的桌面伙伴。 |
+| Robben · 格纹衬衫 | `robben-plaid` | 格纹衬衫与斜挎包的日常造型。 |
+| Dan · 黑裙 | `dan-black-dress` | 长黑发、黑裙和薄荷绿手机的优雅日常造型。 |
 
 导入角色时，打开 **设置 → 自定义宠物 → 选择文件夹**。所选目录的每个一级子目录都会被当作一个角色，只要其中有有效的清单和精灵图：
 
