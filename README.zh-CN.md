@@ -76,10 +76,10 @@ PET_ID=danna-graduation npm start
 | 角色 | ID | 简介 |
 | --- | --- | --- |
 | Danna · 毕业袍 | `danna-graduation` | 默认角色，穿着学士服的 Danna。 |
-| Danna · 长裙 | `danna-dress` | 更日常、温柔的 Danna 造型。 |
-| Robben | `robben` | 陪你写代码、休息和发呆的桌面伙伴。 |
+| Danna · 奶白外套 | `danna-dress` | 奶白色外套连衣裙的温柔日常造型。 |
+| Robben · 卡其夹克 | `robben` | 陪你写代码、休息和发呆的桌面伙伴。 |
 | Robben · 格纹衬衫 | `robben-plaid` | 格纹衬衫与斜挎包的日常造型。 |
-| Dan · 黑裙 | `dan-black-dress` | 长黑发、黑裙和薄荷绿手机的优雅日常造型。 |
+| Danna · 黑裙 | `dan-black-dress` | 长黑发、黑裙和薄荷绿手机的优雅日常造型。 |
 
 导入角色时，打开 **设置 → 自定义宠物 → 选择文件夹**。所选目录的每个一级子目录都会被当作一个角色，只要其中有有效的清单和精灵图：
 

@@ -62,21 +62,27 @@ function scheduleUserDataCleanup() {
 }
 
 scheduleUserDataCleanup();
+const bundledPetsRoot = path.join(root, "src/assets/pets");
+function bundledSpritesheetUrl(name) {
+  const petRoot = path.join(bundledPetsRoot, name);
+  const manifest = JSON.parse(fs.readFileSync(path.join(petRoot, "pet.json"), "utf8"));
+  return pathToFileURL(
+    path.resolve(petRoot, manifest.spritesheetPath || "spritesheet.webp")
+  ).href;
+}
 const activePet = {
   key: "renderer-test",
-  spritesheetUrl: pathToFileURL(path.join(root, "src/assets/pets/robben/spritesheet.webp")).href
+  spritesheetUrl: bundledSpritesheetUrl("robben")
 };
 const brokenHitTestPet = {
   key: "broken-hit-test",
   spritesheetUrl: pathToFileURL(path.join(userData, "missing-spritesheet.webp")).href
 };
-const bundledHitTestPets = fs.readdirSync(path.join(root, "src/assets/pets"), { withFileTypes: true })
+const bundledHitTestPets = fs.readdirSync(bundledPetsRoot, { withFileTypes: true })
   .filter((entry) => entry.isDirectory())
   .map((entry) => ({
     key: `hit-test-${entry.name}`,
-    spritesheetUrl: pathToFileURL(
-      path.join(root, "src/assets/pets", entry.name, "spritesheet.webp")
-    ).href
+    spritesheetUrl: bundledSpritesheetUrl(entry.name)
   }));
 const calls = [];
 let window;

@@ -76,10 +76,10 @@ Five characters ship with the app:
 | Character | ID | Description |
 | --- | --- | --- |
 | Danna · Graduation | `danna-graduation` | The default pet in a graduation gown. |
-| Danna · Dress | `danna-dress` | A softer everyday Danna look. |
-| Robben | `robben` | A companion for coding, breaks, and quiet moments. |
+| Danna · Cream Coat | `danna-dress` | A softer everyday Danna look in a cream coat dress. |
+| Robben · Tan Jacket | `robben` | A companion for coding, breaks, and quiet moments. |
 | Robben · Plaid | `robben-plaid` | A casual plaid-shirt look with a crossbody bag. |
-| Dan · Black Dress | `dan-black-dress` | An elegant black-dress look with a mint-green phone. |
+| Danna · Black Dress | `dan-black-dress` | An elegant black-dress look with a mint-green phone. |
 
 To add a pet, open **Settings → Custom pets → Choose folder**. Each direct child folder is treated as one pet when it contains a valid manifest and spritesheet:
 

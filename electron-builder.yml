@@ -14,6 +14,7 @@ files:
   - README.zh-CN.md
   - '!**/.DS_Store'
   - '!**/*.map'
+  - '!src/assets/pets/**/*.{jpg,jpeg,JPG,JPEG}'
   - '!**/test/**'
   - '!**/.github/**'
   - '!scripts/**'
